@@ -1,11 +1,11 @@
-node_modules/
-dist/
-*.mcpb
-.DS_Store
-.env
-*.log
 
 # Internal — never ships in a public repo.
 # Spec carries prior-art teardowns, market analysis, advisor review and
 # nordio's own lead-gen findings (real prospect names + financials).
+*.log
+*.mcpb
+.DS_Store
+.env
 SPEC.md
+dist/
+node_modules/

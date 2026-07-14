@@ -21,8 +21,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.check.json",
     "build": "tsc -p tsconfig.json",
-    "pack": "npx --yes @anthropic-ai/mcpb pack .",
-    "bundle": "npm run build && npm run pack",
+    "bundle": "node bin/bundle.mjs",
     "nace:build": "node bin/build-nace.mjs > src/nace-table.ts"
   },
   "dependencies": {
@@ -30,6 +29,7 @@
     "zod": "3.25.76"
   },
   "devDependencies": {
+    "@anthropic-ai/mcpb": "2.1.2",
     "@types/node": "20.14.15",
     "tsx": "4.19.2",
     "typescript": "5.5.4",
