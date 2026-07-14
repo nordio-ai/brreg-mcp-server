@@ -50,7 +50,11 @@ export function isVatExemptSector(code: string): boolean {
   return VAT_EXEMPT_PREFIXES.some((p) => n.startsWith(p));
 }
 
-/** `96.2` / `96.21` / `96.210` all normalise so lookups don't depend on the caller's formatting. */
+/**
+ * Strips whitespace only. It does NOT collapse `96.2`/`96.21`/`96.210` into one key — an earlier
+ * comment here claimed it did. Those stay distinct strings; different lengths are handled by the
+ * aggregate walk in lookupRetired, not by normalisation.
+ */
 export function normalise(code: string): string {
   return code.trim().replace(/\s/g, "");
 }

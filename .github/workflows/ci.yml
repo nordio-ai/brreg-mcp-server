@@ -59,6 +59,19 @@ jobs:
       - name: no real personal data in fixtures
         run: node bin/check-no-pii.mjs
 
+  # A generated artifact whose regeneration is never checked is a hand-typed table with extra steps.
+  # Non-blocking: SSB is a third party and its availability is not our merge gate — but drift must be
+  # visible. If this goes red, either SSB republished (fold it in) or someone hand-edited the table.
+  nace-drift:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm run nace:build
+      - run: git diff --exit-code src/nace-table.ts
+
   # Tier 3 — live canary. NON-blocking by design: brreg is a third party and its availability
   # is not our merge gate. It exists to tell us when the REGISTER changed under us.
   canary:

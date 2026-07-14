@@ -93,8 +93,9 @@ home address. \`organisasjonsform === "ENK"\` is the marker.
 `;
 
 const naceSection = (): string => {
-  // Show the codes an agent is most likely to hit, not all 834 — the table is queried by the
-  // guard, not read by the model. Full detail is one lookup away.
+  // Show the codes an agent is most likely to hit, not the whole table — it is queried by the
+  // guard, not read by the model. (No count hardcoded here: this is the file that just removed
+  // hardcoded numbers, and RETIRED.size is rendered from the table below anyway.)
   const notable = ["96.02", "86.90", "86.901", "86.902", "86.907", "86.909", "96.04"];
   const rows = notable
     .map((code) => {
@@ -104,6 +105,16 @@ const naceSection = (): string => {
     })
     .filter(Boolean)
     .join("\n");
+
+  // If a regenerate drops one of these, the table silently shrinks rather than telling anyone —
+  // the same silent-degradation this connector exists to name. Fail loudly instead.
+  const missing = notable.filter((c) => !RETIRED.get(c));
+  if (missing.length) {
+    throw new Error(
+      `brreg://reference: NACE codes missing from the generated table: ${missing.join(", ")}. ` +
+        `Re-run bin/build-nace.mjs and update the notable list.`,
+    );
+  }
 
   return `
 ## NACE — the retired-code trap

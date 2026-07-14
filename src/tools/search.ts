@@ -27,8 +27,10 @@ export interface SearchResult {
   units: Unit[];
   total: number;
   returned: number;
-  /** `total > returned`. Narrow the selector — this tool does not paginate beyond one request. */
+  /** The cap cut the result short. Narrow the selector — this tool does not paginate. */
   truncated: boolean;
+  /** Units removed by strict_location (brreg's kommune filter leaks ~2.2%). Not truncation. */
+  location_filtered: number;
   hints: SearchHint[];
 }
 
@@ -135,6 +137,8 @@ export async function searchUnits(p: SearchParams, deps: SearchDeps = {}): Promi
   // (N≈20-200); register-scale extraction is an explicit non-goal, so a cursor would be surface
   // with no user.
   let out = units.slice(0, cap);
+  // Capture BEFORE strict_location rebinds `out` — see the truncated field below.
+  const truncated = total > out.length;
 
   // Reachable now that it isn't buried in a loop that can't run.
   if (total > cap) {
@@ -152,10 +156,12 @@ export async function searchUnits(p: SearchParams, deps: SearchDeps = {}): Promi
 
   // Guard: kommunenummer leaks ~2.2% — brreg matches an address that isn't necessarily
   // forretningsadresse. Opt-in post-filter rather than a silent correction.
+  let locationFiltered = 0;
   if (p.kommune) {
     if (p.strict_location) {
       const before = out.length;
       out = out.filter((u) => u.kommunenummer === p.kommune);
+      locationFiltered = before - out.length;
       hints.push({
         kind: "kommune_leak",
         message:
@@ -181,8 +187,18 @@ export async function searchUnits(p: SearchParams, deps: SearchDeps = {}): Promi
       units: out,
       total,
       returned: out.length,
-      /** True when `total` exceeds what was returned. There is no cursor — see the note above. */
-      truncated: total > out.length,
+      /**
+       * True when the CAP truncated the result — not when strict_location dropped a leak.
+       *
+       * This was `total > out.length` computed after the filter, so a complete 2-unit result with
+       * one Bergen leak dropped reported `{total:2, returned:1, truncated:true}` and told the agent
+       * to narrow a selector that was already right. Nothing was truncated; a wrong row was removed.
+       * `narrow_selector` (which keys off `total > cap`) stayed correctly silent — two fields
+       * answering the same question in opposite directions was the tell.
+       */
+      truncated,
+      /** How many out-of-kommune units strict_location removed. Distinct from truncation. */
+      location_filtered: locationFiltered,
       hints,
     },
   };

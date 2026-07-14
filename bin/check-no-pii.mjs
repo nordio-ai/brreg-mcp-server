@@ -15,6 +15,11 @@ const walk = (dir) =>
 
 // Synthetic names we deliberately ship. Anything person-shaped that ISN'T one of these is suspect.
 const ALLOWED = ["Ola Nordmann", "Kari Testesen", "Per Eksempel", "Nina Prøve", "Ola Mockmann", "Kari Mocksen"];
+// Token set, so a name is allowed only if BOTH of its parts are ours. The previous check —
+// `ALLOWED.some(a => a === full || a.split(" ").includes(value))` — passed any single token that
+// appeared anywhere in the allowlist, so "Per Hansen" survived on the strength of "Per". Only the
+// next iteration testing "Hansen" alone caught it; the pair logic was decoration.
+const ALLOWED_TOKENS = new Set(ALLOWED.flatMap((n) => n.split(" ")));
 
 const W1 = [3, 7, 6, 1, 8, 9, 4, 5, 2];
 const W2 = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
@@ -26,8 +31,12 @@ const isFnr = (s) => {
   return (k1 === 11 ? 0 : k1) === d[9] && (k2 === 11 ? 0 : k2) === d[10];
 };
 
+// Optional target dir (used by the self-test to plant a probe OUTSIDE the repo tree).
+const target = process.argv[2];
+const roots = target ? [target] : ["src", "tests"];
+
 let bad = 0;
-for (const file of [...walk("src"), ...walk("tests")]) {
+for (const file of roots.flatMap(walk)) {
   if (!/\.(ts|mjs|js|json)$/.test(file)) continue;
   const text = readFileSync(file, "utf8");
 
@@ -46,13 +55,16 @@ for (const file of [...walk("src"), ...walk("tests")]) {
   const names = [...text.matchAll(/\b"?(fornavn|etternavn)"?\s*:\s*"([^"]+)"/g)];
   for (let i = 0; i < names.length; i++) {
     const value = names[i][2];
-    // A template placeholder is not a name. Without this the checker flags its own self-test,
-    // which writes a fixture via `fornavn: "${planted[0]}"`.
-    if (value.includes("${")) continue;
+    // NOTE: there is deliberately NO carve-out for `${...}` template placeholders here.
+    // One briefly existed, because the self-test wrote its probe via `fornavn: "${planted[0]}"`
+    // into a file this checker walks. That carved a blind spot into PRODUCTION code to accommodate
+    // a test — any name reaching a fixture by interpolation would have been invisible. The test now
+    // writes its probe to a temp dir outside src/ and tests/, so the carve-out is unnecessary.
     // Names come in fornavn/etternavn pairs; test the pair, since "Ola" alone is not identifying.
     const partner = names[i + 1]?.[1] === "etternavn" ? names[i + 1][2] : undefined;
     const full = partner ? `${value} ${partner}` : value;
-    const allowed = ALLOWED.some((a) => a === full || a.split(" ").includes(value));
+    // Allowed only if every token is one of ours. Not "some token appears somewhere".
+    const allowed = ALLOWED.includes(full) || full.split(" ").every((t) => ALLOWED_TOKENS.has(t));
     if (!allowed) {
       console.error(`❌ ${file}: person name not in the synthetic allowlist: "${full}"`);
       console.error(`   Real names must never enter this repo — git is the least-erasable store`);

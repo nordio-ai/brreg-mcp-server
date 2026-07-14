@@ -61,7 +61,7 @@ describe("[fixture] contract — description/schema parity", () => {
           ["status", "unit_type", "antallAnsatte", "antallAnsatte_reported", "valuta", "aar",
            "stale_months", "hjemmeside", "not_filed", "not_applicable", "filed_no_revenue_line",
            "organisation", "person", "driftsinntekter", "filed", "deleted", "gone", "not_found",
-           "slettedato", "cursor", "total", "returned"].includes(p),
+           "slettedato", "truncated", "location_filtered", "total", "returned"].includes(p),
           `${t.name}: description mentions \`${p}\` which is neither a param nor a known response field`,
         ).toBe(true);
       }

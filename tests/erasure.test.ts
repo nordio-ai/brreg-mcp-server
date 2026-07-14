@@ -69,7 +69,7 @@ describe("[fixture] erasure — no stale-serve path exists", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2); // the "immutable" filing was NOT served from cache
   });
 
-  it("no module in src/ imports a cache or writes state", async () => {
+  it("no module in src/ writes to disk", async () => {
     const { readdirSync, readFileSync } = await import("node:fs");
     const { join } = await import("node:path");
     const walk = (dir: string): string[] =>
@@ -77,9 +77,48 @@ describe("[fixture] erasure — no stale-serve path exists", () => {
         e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)],
       );
     for (const file of walk("src")) {
-      const src = readFileSync(file, "utf8");
-      expect(src, `${file} imports Cache`).not.toMatch(/\bCache\b/);
-      expect(src, `${file} writes to disk`).not.toMatch(/writeFileSync|createWriteStream|appendFile/);
+      expect(readFileSync(file, "utf8"), `${file} writes to disk`).not.toMatch(
+        /writeFileSync|createWriteStream|appendFile/,
+      );
     }
+  });
+
+  /**
+   * THE test that should have existed, and the reason it didn't work before.
+   *
+   * This file previously "guarded against a future optimisation that adds caching" by grepping
+   * src/ for the WORD `Cache`. A memoization Map then shipped in server.ts, past that grep, under
+   * a comment reading "it is NOT a cache" — lowercase, so it didn't even trip its own denial.
+   * Proven breach: an ENK resolved, brreg 410'd it, and the next call made ZERO upstream requests.
+   *
+   * A grep for a word is not a test of a behaviour. This drives the REAL wiring and counts calls.
+   */
+  it("the real server wiring re-requests after a 410 — no memo survives the erasure", async () => {
+    const { makeLookupOrgForm } = await import("../src/server.js");
+    const { fetchFinancials } = await import("../src/tools/financials.js");
+
+    let gone = false;
+    let calls = 0;
+    const fetchImpl = vi.fn(async () => {
+      calls++;
+      return gone
+        ? json(410, {})
+        : json(200, { organisasjonsnummer: "999999901", navn: "FRISØR X", organisasjonsform: { kode: "ENK" } });
+    }) as unknown as typeof fetch;
+
+    const lookupOrgForm = makeLookupOrgForm(fetchImpl); // the production function, not a copy
+
+    const first = await fetchFinancials("999999901", undefined, { fetchImpl, lookupOrgForm });
+    expect(first.status).toBe("ok");
+    if (first.status === "ok") expect(first.data.status).toBe("not_applicable");
+    const before = calls;
+
+    gone = true; // brreg issues its erasure request
+    const second = await fetchFinancials("999999901", undefined, { fetchImpl, lookupOrgForm });
+
+    // The invariant: the erasure must be OBSERVED, which means the request must be MADE.
+    expect(calls).toBeGreaterThan(before);
+    expect(second.status).toBe("error");
+    if (second.status === "error") expect(second.reason).toBe("gone");
   });
 });
