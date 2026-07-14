@@ -127,12 +127,22 @@ level up.
 
 1. **Run CI.** Needs a remote. Until the matrix is green, "cross-platform" is an assumption.
 2. **Pack the `.mcpb`** and clean-room it on a fresh Desktop profile.
-3. **The eval nobody has run — and the only claim the product rests on.** Every test asserts the
-   server *emits* a hint. **None asserts a model reads one and changes its answer.** ~20 questions
-   with known-correct answers drawn from the real run's own failures ("how many hairdressers in
-   Oslo?" → not 0; "does DENTAL NORCO have revenue?" → not "no"; "compare Equinor's revenue to X's"
-   → must check `valuta`), three arms: raw `curl` · `curl` + a SKILL.md carrying the same warnings as
-   prose · this MCP. **Kill-criterion: if the skill matches the server, ship the document** — it is
-   200 lines and installs nowhere. If the server wins, the thesis (*code that fires beats prose that
-   might be read*) is proven, and that result is worth more than the connector.
+3. ~~The eval nobody has run~~ — **RUN. Twice. It argues against the product.** See `eval/RESULTS.md`.
+
+   **Run 2 (non-leading questions, corrected product): A 12/12 · B 12/12 · C 12/12.** Ranked by
+   usefulness, **A ≈ B > C**. Raw curl with **no guidance** caught every trap unaided — rejected the
+   silent `96.02` zero, refused its own VAT-filter approach after seeing 72 of 3,407, found
+   `fraAntallAnsatte`, traced the kommune leak to `postadresse`. The kill-criterion fired harder than
+   written: not just "the skill matches the server" but **"raw curl matches both"**. Arm C came last
+   — its four curated tools were a ceiling the other arms did not have.
+
+   **Run 1 refuted the product**: arm C answered "brreg holds no email or phone — those fields do not
+   exist", **citing this server's own instructions**, while `mapUnit` withheld the fields that
+   disprove it. Three guards were false; all three traced to an extraction agent reporting a
+   *script's* field-selection as a property of the *register*.
+
+   **What neither run tested, and it is the whole question:** the traps are real, but they do not
+   bite a careful model given one task and two minutes. The failure that motivated this connector was
+   a **bulk script at N=13,000 composing NACE codes from memory while egress was blocked**. A careful
+   agent does not need this server; a careless script will not call it. **Who is it for?**
 4. NACE: two aggregate rows (`96.04`, `86.907`) resolve via parents; spot-check on the next SSB refresh.
