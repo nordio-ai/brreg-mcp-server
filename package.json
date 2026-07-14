@@ -4,9 +4,16 @@
   "description": "Norwegian business register (Brønnøysundregistrene) as an MCP server — companies, roles, subunits and annual accounts, with the register's silent traps encoded as guards.",
   "license": "MIT",
   "type": "module",
-  "bin": { "brreg-mcp": "dist/stdio.js" },
-  "files": ["dist", "server.json"],
-  "engines": { "node": ">=20" },
+  "bin": {
+    "brreg-mcp": "dist/stdio.js"
+  },
+  "files": [
+    "dist",
+    "server.json"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "tsx src/stdio.ts",
     "dev:mock": "tsx src/stdio.ts --mock",
@@ -25,6 +32,6 @@
     "@types/node": "20.14.15",
     "tsx": "4.19.2",
     "typescript": "5.5.4",
-    "vitest": "2.1.8"
+    "vitest": "4.1.10"
   }
 }

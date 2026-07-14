@@ -49,7 +49,12 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci --ignore-scripts
-      - name: dependency audit
+      # The tree that actually ships to a Desktop user who cannot audit it: zero tolerance.
+      # Two runtime deps (server-kit + zod), so this is a bar we can actually hold.
+      - name: dependency audit — shipped tree
+        run: npm audit --omit=dev --audit-level=low
+      # Dev tooling can't reach a user, but a red audit that everyone ignores is worse than none.
+      - name: dependency audit — dev tooling
         run: npm audit --audit-level=high
       - name: no real personal data in fixtures
         run: node bin/check-no-pii.mjs
