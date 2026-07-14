@@ -64,7 +64,7 @@ manifest.json are in, and **the clean-room install gate passes from a cold clone
 
 | | Line | Notes |
 |---|---|---|
-| ✅ | Tests exist and run green | **84 fixture (blocking) + 5 live canaries.** Contract + unit + acceptance. |
+| ✅ | Tests exist and run green | **106 fixture (blocking) + 5 live canaries.** Contract + unit + acceptance + backoff + mock + erasure + README parity. |
 | N/A | **[write]** sandbox round-trips | Read-only. |
 | ✅ | Acceptance tests frozen | Two failures this run were **test-fact errors, corrected without weakening an assertion**: a fabricated fnr with an invalid checksum (impl was right), and a case-sensitive regex vs a sentence-initial "Foretaksnavneloven". |
 | ✅ | **CI gates** | Fixed. Three tiers: hermetic (blocking, 3-OS matrix, typecheck+test+build+stdio smoke), supply chain (blocking — `npm audit`, and the secret scan **repointed at committed personal data**, since no tokens exist here), live canary (`continue-on-error` — brreg is a third party, not our merge gate). `npm ci --ignore-scripts`. |
