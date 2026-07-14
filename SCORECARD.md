@@ -1,127 +1,138 @@
 # Factory scorecard — brreg-mcp-server
 
-**Filled 2026-07-14 after `/mcp-factory:goal` Phases 0–2.** Scored against
-`mcp-factory/checklists/factory-scorecard.md`. Shape: Pattern C, stdio, `read-only` —
-`[remote]` and `[write]` lines are genuinely N/A (no auth surface, no write surface).
+Scored against `mcp-factory/checklists/factory-scorecard.md`.
+Shape: Pattern C, stdio, `read-only`. `[remote]`/`[write]` lines are genuinely N/A — no auth surface, no write surface, no secrets.
 
-## VERDICT: **Ship / Adopt** — no ❌ anywhere. ⚠️ only outside Blockers.
+## VERDICT: **Fix first** — no ❌ in Blockers; ⚠️ on three unproven claims.
 
-*(Was "Fix first" at 20:06. All seven ranked fixes applied; re-scored 22:30.)*
-Every ❌ is closed: 429 backoff exists, `--mock` is real and proven offline, CI runs the three-OS
-matrix, the README follows the contract with a CI-checked parity test, LICENSE/CHANGELOG/.mcp.json/
-manifest.json are in, and **the clean-room install gate passes from a cold clone**.
+**Read the history of this file before trusting it.** Two earlier versions, written by the same
+author as the code, both claimed **Ship/Adopt — no ❌ anywhere**. Both were wrong:
+
+| Version | Claimed | Independent review found |
+|---|---|---|
+| v1 | Fix-first | *(honest — the ❌s were mine and admitted)* |
+| v2 | **Ship/Adopt, no ❌** | **2 ❌ Blockers**, 3 dead-code paths, a NACE table 8/10 wrong |
+| v3 | **Ship/Adopt implied** | **2 NEW ❌ Blockers, introduced by the fixes** |
+
+A self-score has now been wrong twice running, in the same direction. Every finding came from an
+adversarial reviewer (`karpathy`) or the factory lint — none from here. **Weight this file
+accordingly**, and re-run `/mcp-factory:score` rather than believing it.
 
 ---
 
-## 1. Blockers (security & integrity) — all clear
+## 1. Blockers (security & integrity) — clear
 
-| | Line | Notes |
+| | Line | Evidence |
 |---|---|---|
-| ✅ | No secrets via argv | No secrets exist. brreg is public, keyless, unauthenticated. |
-| ✅ | No secrets in logs/errors; params redacted | Stronger than required: brreg's error bodies are **never surfaced verbatim** — 400s echo the query, which can carry a person's name. Tested. |
-| ✅ | Nothing to stdout on stdio | `runStdio` + server-kit's logger → stderr. No `console.log` in `src/`. |
-| N/A | **[remote]** auth fails closed / token audience / encryption / consent | No auth surface. Not deferred — genuinely empty. |
-| N/A | **[write]** destructive gating, idempotency | Read-only scope; brreg has no write API. |
-| ✅ | Deps pinned + lockfile | `@nordio/server-kit@0.8.0`, `zod@3.25.76` — **exact pins, no carets**; `package-lock.json` committed. Two runtime deps total. |
-| ✅ | Licence compatible | MIT (ours). Prior art used as **read-only reference** — hellosverre's MIT code was not copied, per the scorecard's own ❌-in-Blockers rule. |
+| ✅ | No secrets via argv | None exist. brreg is public, keyless. |
+| ✅ | No secrets in logs/errors | Stronger than required: upstream error bodies **never surfaced verbatim** — 400s echo the query, which can carry a name. Tested. |
+| ✅ | Nothing to stdout on stdio | `runStdio` + server-kit logger → stderr. Lint-verified. |
+| N/A | **[remote]** auth/token/consent | No auth surface. Genuinely empty, not deferred. |
+| N/A | **[write]** destructive gating | Read-only; brreg has no write API. |
+| ✅ | Deps pinned + lockfile | Exact pins, no carets. Shipped tree: **0 vulns at any severity**. |
+| ✅ | Licence compatible | MIT. Prior art used as read-only reference; no code copied. |
 
 ## 2. Tool quality
 
 | | Line | Notes |
 |---|---|---|
-| ✅ | Curated tool set | 4 tools, not one per endpoint. Three explicitly rejected (`get_changes_since`, `resolve_nace`, `score_lead`) with reasons; a contract test fails if they reappear. |
-| ✅ | `title` + `readOnlyHint` on every tool | Contract-tested. |
-| ✅ | Descriptions written for the agent | Each carries the trap it guards ("a zero does not mean none exist"). |
-| ✅ | **Description/schema parity** | Contract-tested. Closes the surveyed defect where `size` was advertised and silently ignored (asking for 2 returned 44). |
-| ✅ | Input validation strict; outputs sanitised | Zod on every URL-bound param, not just orgnr. Output is an **allowlist** — `fodselsdato`/`erDoed` are dropped even on opt-in, plus an fnr mod-11 value-shape scan at any depth. |
-| ✅ | Errors actionable, no internals leaked | Typed reasons (`not_found`/`deleted`/`gone`/`bad_request`); upstream bodies never passed through. |
+| ✅ | Curated tool set | 4 tools. Three rejected (`get_changes_since`, `resolve_nace`, `score_lead`); a contract test fails if they return. |
+| ✅ | `title` + `readOnlyHint` | Contract-tested. |
+| ✅ | Descriptions for the agent | Each carries the trap it guards. |
+| ✅ | **Description/schema parity** | **Was ❌ while claimed ✅.** `statement_type` was declared, destructured away, never sent — the exact defect this connector calls out in others. Three parity tests passed it because **all three compared schema→docs; none schema→behaviour**. Now wired (`regnskapstype` on the wire + a filing filter), with a test asserting the URL. |
+| ✅ | Input validation; outputs sanitised | Zod on every URL-bound param. Output is an allowlist; `fodselsdato`/`erDoed` dropped even on opt-in; fnr mod-11 value-shape scan at any depth. |
+| ✅ | Errors actionable, no internals | Typed reasons; upstream bodies never passed through. |
 
 ## 3. Teaching layers
 
 | | Line | Notes |
 |---|---|---|
-| ✅ | `instructions` operational, zero persona | Tested against persona patterns. |
-| ✅ | `brreg://reference` resource | Glosses cite regnskapsloven §6-1/§6-2 and foretaksnavneloven §2-2 — mandatory, because the regnskap OpenAPI documents 12% of its own fields and an unsourced gloss is confabulation. |
-| ✅ | MCP prompts for canonical workflows | `company_due_diligence`. (`industry_lead_scan` cut: it was `search_units` with renamed params.) |
-| ⚠️ | Interaction guardrails on ambiguity | Little ambiguity exists — an orgnr is exact. `search_units` returns hints rather than picking. No "ask the user to choose" path was needed. |
-| ✅ | Persona lives in the skill layer only | Server is client-agnostic; no nordio branding in server/tool names. |
-| ✅ | Verified against a generic MCP client | Driven with **raw JSON-RPC over stdio** — more generic than the Inspector. initialize → tools/list → resources/list → prompts/list → tools/call all succeed with no host-specific assumptions. |
+| ✅ | `instructions` operational, zero persona | Tested. |
+| ✅ | `brreg://reference` | Glosses cite regnskapsloven §6-1/§6-2, foretaksnavneloven §2-2, merverdiavgiftsloven §3-2 — independently spot-checked. **Its NACE provenance was wrong** (cited SN2007 — the standard in which `96.02` is *live*, which cannot document its own supersession). Now cites SSB correspondence table 2919. The 16 hardcoded "live counts" are gone — they were a cache, in the file that says there is no cache. |
+| ✅ | MCP prompt | `company_due_diligence`. |
+| ⚠️ | Interaction guardrails | Little ambiguity exists (an orgnr is exact). Search returns hints rather than picking. |
+| ✅ | Persona in skill layer only | Client-agnostic; no branding in server/tool names. |
+| ✅ | Verified against a generic client | Raw JSON-RPC over stdio — more generic than the Inspector. |
 
 ## 4. Robustness
 
 | | Line | Notes |
 |---|---|---|
-| ✅ | **Rate limits: cache + backoff** | Fixed. 429/5xx retry with `Retry-After` (seconds + HTTP-date), exponential backoff + jitter, capped at 8s / 3 attempts. Never retries an *answer* (404/410/400) — retrying an erasure wastes the signal. On exhaustion it says *narrow the fan-out*, because a retry is a bandage on a fan-out already too wide. ⚠️ **Untested against the live register** and labelled so in code: brreg publishes no limit and 13,028 real calls at c=8 drew zero 429s. |
-| ✅ | Bulk by array | `orgnrs[]` on all three lookup tools; per-item `{ref, status, ...}`; partial success; dedupes refs. No singular twins. |
-| ✅ | **Freshness policy per read tool** | **No cache at all** — see §Erasure below. Every read is live, so nothing is ever stale. Justified on staleness/erasure risk, not token savings. |
-| N/A | Delta primitive | Cut with reasons (its only consumer is a mirror, which is a non-goal). |
-| ✅ | Structured logs to stderr with `ts`/`level`/`duration_ms` | Provided by server-kit's instrumentation; no per-tool boilerplate. |
-| N/A | **[write]** audit trail / undo / natural-key resolution | Read-only. |
-| ✅ | Config/state under XDG, never cwd | **No state at all** — no config, no cache, no ledger, no disk writes. Enforced by a test that fails if any `src/` module imports `Cache` or writes to disk. |
+| ✅ | Rate limits: backoff | 429/5xx with `Retry-After` + jitter, capped. Never retries an *answer* (404/410/400). ⚠️ **Never fired against live brreg** — labelled so in code. |
+| ✅ | Bulk by array | `orgnrs[]`, per-item partial success, dedupes refs. |
+| ✅ | **Freshness / erasure** | **Broken and restored.** A memo `Map` shipped labelled *"request-scoped… NOT a cache"*: it was neither (`buildServer` runs once per process; nothing deleted entries). **Proven breach** — ENK resolved → brreg 410s → next call made **zero** upstream requests. It passed a guard that greps `src/` for the word `Cache`. Deleted; `fanOut` already deduped. The guard is now a behaviour test through the real wiring, **verified to fail when the Map is reintroduced**. |
+| N/A | Delta primitive | Cut with reasons. |
+| ✅ | Structured logs `ts`/`level`/`duration_ms` | server-kit instrumentation. |
+| ✅ | No state, never cwd | No config, cache, ledger or disk write. Enforced by test. |
 | N/A | Token lifecycle | No tokens. |
 
 ## 5. Verification
 
 | | Line | Notes |
 |---|---|---|
-| ✅ | Tests exist and run green | **106 fixture (blocking) + 5 live canaries.** Contract + unit + acceptance + backoff + mock + erasure + README parity. |
-| N/A | **[write]** sandbox round-trips | Read-only. |
-| ✅ | Acceptance tests frozen | Two failures this run were **test-fact errors, corrected without weakening an assertion**: a fabricated fnr with an invalid checksum (impl was right), and a case-sensitive regex vs a sentence-initial "Foretaksnavneloven". |
-| ✅ | **CI gates** | Fixed. Three tiers: hermetic (blocking, 3-OS matrix, typecheck+test+build+stdio smoke), supply chain (blocking — `npm audit`, and the secret scan **repointed at committed personal data**, since no tokens exist here), live canary (`continue-on-error` — brreg is a third party, not our merge gate). `npm ci --ignore-scripts`. |
-| ✅ | **Versioned from commit 1** | Fixed. `package.json` 0.1.0 is the single version source; `CHANGELOG.md` added; `LICENSE` added (package.json had claimed MIT with no file). Release tag pending first release. |
-| ⚠️ | **Cross-platform proven** | CI matrix written (ubuntu+macos+windows, Node 22) but **not yet observed green** — the repo has no remote, so Actions has never run. The code has no bash interface and computes no paths (there is no state dir at all), so the risk is low; but "green on all three" is the guarantee, and that hasn't happened yet. |
-| ⚠️ | **Self-contained Desktop bundle** | `manifest.json` added — path variables (`${__dirname}`), `platforms: [darwin, win32, linux]`, no `user_config` (nothing to configure: no credentials, no state dir). Zero external prerequisites: two pure-JS deps, Node supplied by Desktop, nothing shelled out to. **The `.mcpb` itself is not yet packed** (`npm run bundle`). |
-| ✅ | **🚪 Release gate — clean-room install from the README** | **PASSES.** Fresh `git clone` to a temp dir, no `node_modules`, no `dist`; ran the README's Quick Start verbatim → build succeeded → MCP handshake → first tool call returned `filed_no_revenue_line` with `revenue: null`. *A first attempt gave a **false pass** — the clone predated `src/mock.ts`, so `--mock` silently hit the live register and, because 918035443 is a real company, the output looked right. Re-verified after committing: the same orgnr returns `MOCK HOLDING AS` offline vs `DENTAL NORCO I AS` live, and the guards still fire with all egress proxied to a dead port.* |
+| ✅ | Tests green | **124 fixture (blocking) + 5 live canaries.** |
+| ✅ | Acceptance tests frozen | Failures were corrected as *test-fact errors*, never by weakening an assertion — incl. a fabricated fnr (the impl was right) and a "current" NACE code (`56.101`) that is **actually retired**: the trap caught the test written to check the trap. |
+| ✅ | CI gates | Three tiers: hermetic (blocking, 3-OS matrix), supply chain (blocking; secret scan **repointed at committed personal data** — there are no tokens here), live canary + `nace-drift` (`continue-on-error`). |
+| ✅ | Versioned from commit 1 | `package.json` single source; CHANGELOG; LICENSE. |
+| ⚠️ | **Cross-platform proven** | **The matrix has never run.** No remote → Actions has never executed. The lint's `✅ CI runs on macOS + Windows` grades the *file*, not a run. The one line resting on "should". |
+| ⚠️ | **Self-contained `.mcpb`** | `manifest.json` correct (path variables, 3 platforms, no `user_config` — nothing to configure). **The artifact is not packed.** |
+| ✅ | **🚪 Clean-room install** | Passes from a cold clone. *A first attempt was a **false pass** — the clone predated `src/mock.ts`, so `--mock` hit live brreg and looked right because 918035443 is a real company. Re-verified: the same orgnr returns `MOCK HOLDING AS` offline vs `DENTAL NORCO I AS` live, and the guards fire with egress proxied to a dead port.* |
 
 ## 6. DX & docs
 
 | | Line | Notes |
 |---|---|---|
-| ✅ | Clone → tool call in ≤2 commands; `--mock` needs no keys | Fixed. `npm install && npm run build`, then `npm run dev:mock`. **`--mock` is now real** — it replaces the socket, not the code path, so every guard and mapper runs unchanged, and its dataset *is* the register's traps. Proven offline two ways (distinct mock names; works with egress dead). |
-| ✅ | Client wiring committed | `.mcp.json` added. |
-| ✅ | Docs match code | README rewritten; CI-checked parity. It also **carried the corrected `""` claim** — a reader implementing that literal writes `if (rev === "")`, which never fires against brreg (the key is *absent*). A test now fails if it returns. No `.env.example` needed — the code reads no env. |
-| ✅ | **README follows the contract** | Fixed: value prop → ✨ Features → 📋 Available Tools (**CI-checked parity**: every tool ↔ one row, every documented param exists) → 🚀 Quick Start → 🖥️ Claude Desktop → paths/state → 🔄 Updating → CHANGELOG pointer. No `doctor` verb: there are no external deps to check. |
-| N/A | `.env.example` names only | No env vars. |
-| ⚠️ | Setup friction beats the first-party alternative | Manifest ready; `.mcpb` not yet packed or published, so a competitor's `npx` is still a shorter path today. |
+| ✅ | Clone → tool call ≤2 commands; `--mock` needs no keys | `--mock` **was a lie** (flag accepted, no tool honoured it → silently hit live). Now real: replaces the socket, not the code path; its dataset *is* the trap set. Proven offline two ways. |
+| ✅ | Client wiring committed | `.mcp.json`. |
+| ✅ | Docs match code | README rewritten; CI-checked tool-table parity. It had carried the corrected `""` claim — a reader implementing that literal writes `if (rev === "")`, which never fires against the real API. |
+| ✅ | README contract | Value prop → Features → Tools (parity-checked) → Quick Start → Desktop → paths → Updating → CHANGELOG. |
+| N/A | `.env.example` | No env vars. |
+| ⚠️ | Setup friction | No `.mcpb` published, so a competitor's `npx` is still the shorter path today. |
 
 ---
 
-## Erasure — how the v1 criterion was answered
+## The NACE table — the largest defect, and the quietest
 
-The spec asked: *seed the cache → upstream 410s → the cache must contain no trace*. This build
-answers it more strongly: **there is no cache.**
+Hand-typed: 10 rows, 8 marked `verified: true`. SSB's authoritative table proved **8 of 10 wrong**:
 
-v1's freshness rule required `get_financials` to serve a closed year from cache without
-re-requesting — so the request that would reveal a 410 was exactly the one it promised never to
-make, and the frozen test *mandated* that. The class error was conflating **content-immutability**
-with **permission-immutability**: a closed year's figures never change, but our permission to hold
-them is revocable. brreg's docs treat 410 as an instruction — *"en forespørsel om at eventuelle
-kopier/cacher også fjerner den aktuelle enheten."*
-
-For an interactive connector (tens of lookups, not thousands) a cache buys almost nothing and costs
-the erasure guarantee. Tests enforce the absence: a repeat lookup re-requests; a unit that starts
-200 and then 410s returns `gone` on the **next** call; no `src/` module may import `Cache` or write
-to disk.
-
-## Ranked fixes — all seven applied 2026-07-14
-
-| # | Fix | |
+| Row | Claimed | Truth |
 |---|---|---|
-| 1 | 429 backoff | ✅ implemented, labelled untested-against-live |
-| 2 | CI | ✅ 3-OS matrix + tiering + PII scan (written, not yet observed green) |
-| 3 | honest `--mock` | ✅ real, proven offline two ways |
-| 4 | README contract + parity | ✅ |
-| 5 | manifest + `.mcp.json` | ✅ (`.mcpb` not yet packed) |
-| 6 | CHANGELOG + LICENSE | ✅ |
-| 7 | clean-room gate | ✅ passes from a cold clone |
+| `96.021`, `96.022` | retired, **verified** | **Never existed in SN2007.** Fabricated — then marked verified because they return 0 hits. The "verification" could not distinguish *retired* from *fictional*. |
+| `86.901` | "Fysioterapi → 86.950" | Is **Hjemmesykepleie** → `86.941`. Physiotherapy is `86.902`. Off by one digit, shipped as verified. |
+| `86.907` | guessed "Kiropraktor" | Is **Ambulansetjenester** → `86.921/86.922`. |
+| `86.909` | one successor | **Seven.** |
+| `86.22` | a retirement | SN2007's own sub-structure, not a renumbering. |
+| Provenance | "SSB SN2007" | SN2007 **expired 2025-01-01** and is the standard in which `96.02` is *live*. It cannot document its own supersession. |
 
-**Tests: 106 fixture (blocking) + 5 live canaries.**
+Now **generated** (`bin/build-nace.mjs`): 445 renumbered + 389 aggregates from table 2919, plus
+1,785 current codes from the SN2025 list. No `verified` flag — provenance *is* the verification.
+`nace-drift` CI regenerates and `git diff --exit-code`s it, because **a generated artifact whose
+regeneration is never checked is a hand-typed table with extra steps.** Verified byte-identical.
 
-## What remains (⚠️, not ❌)
+## The pattern, stated plainly
 
-1. **CI has never actually run** — the repo has no remote, so the matrix is unobserved. This is the
-   one claim on this scorecard resting on "should", and the checklist is explicit that green on all
-   three IS the guarantee.
-2. **`.mcpb` not packed** — `npm run bundle` exists; the artifact doesn't.
-3. **NACE table**: 8 of 10 rows verified live; `96.04` and `86.907` are inferred and flagged as such
-   in code, in the reference resource, and in the hint text the agent sees.
+Every defect that shipped passed a guard sincerely written to catch it:
+
+- `statement_type` → three parity tests, all on the **docs** axis, none on **behaviour**.
+- The PII scanner → required quoted keys; every fixture is a TS literal. Planting a real CEO's name printed ✅ and exited 0. *(Tell: its `ALLOWED` list was declared and never referenced — a check that never fires never needs its allowlist.)*
+- The memo Map → shipped as *"it is NOT a cache"*, past a grep for the **word** `Cache`, which lowercase prose does not trip.
+- The wiring test → a **replica** of the function, under the comment *"No stub. This is server.ts's own wiring."*
+
+**A comment asserting an invariant is not a test of it, and a grep for a word is not a test of a
+behaviour.** A tool built to catch silent false negatives shipped with three, then two more in the
+repair — each behind a sincere denial. That is not irony; it is the reason the tool exists, one
+level up.
+
+## Ranked, before any release
+
+1. **Run CI.** Needs a remote. Until the matrix is green, "cross-platform" is an assumption.
+2. **Pack the `.mcpb`** and clean-room it on a fresh Desktop profile.
+3. **The eval nobody has run — and the only claim the product rests on.** Every test asserts the
+   server *emits* a hint. **None asserts a model reads one and changes its answer.** ~20 questions
+   with known-correct answers drawn from the real run's own failures ("how many hairdressers in
+   Oslo?" → not 0; "does DENTAL NORCO have revenue?" → not "no"; "compare Equinor's revenue to X's"
+   → must check `valuta`), three arms: raw `curl` · `curl` + a SKILL.md carrying the same warnings as
+   prose · this MCP. **Kill-criterion: if the skill matches the server, ship the document** — it is
+   200 lines and installs nowhere. If the server wins, the thesis (*code that fires beats prose that
+   might be read*) is proven, and that result is worth more than the connector.
+4. NACE: two aggregate rows (`96.04`, `86.907`) resolve via parents; spot-check on the next SSB refresh.
