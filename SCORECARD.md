@@ -4,10 +4,12 @@
 `mcp-factory/checklists/factory-scorecard.md`. Shape: Pattern C, stdio, `read-only` —
 `[remote]` and `[write]` lines are genuinely N/A (no auth surface, no write surface).
 
-## VERDICT: **Fix first** — no Blocker ❌, but ❌s in §5 Verification and §6 DX.
+## VERDICT: **Ship / Adopt** — no ❌ anywhere. ⚠️ only outside Blockers.
 
-Phases 0–2 are done and green. **Phase 3 (bundle) is not started**, and that is where every ❌
-lives — plus two real misses called out below. Nothing here is a security or correctness blocker.
+*(Was "Fix first" at 20:06. All seven ranked fixes applied; re-scored 22:30.)*
+Every ❌ is closed: 429 backoff exists, `--mock` is real and proven offline, CI runs the three-OS
+matrix, the README follows the contract with a CI-checked parity test, LICENSE/CHANGELOG/.mcp.json/
+manifest.json are in, and **the clean-room install gate passes from a cold clone**.
 
 ---
 
@@ -49,7 +51,7 @@ lives — plus two real misses called out below. Nothing here is a security or c
 
 | | Line | Notes |
 |---|---|---|
-| ❌ | **Rate limits: cache + backoff** | **REAL MISS.** Bounded fan-out (default 8) ✅ and no N+1 ✅, but **no 429 handling and no backoff exists**. The spec explicitly said to implement it *and label it untested*; I did neither. Measured evidence (13,028 calls at c=8 → zero 429s) is why it never surfaced — that is luck, not a design. |
+| ✅ | **Rate limits: cache + backoff** | Fixed. 429/5xx retry with `Retry-After` (seconds + HTTP-date), exponential backoff + jitter, capped at 8s / 3 attempts. Never retries an *answer* (404/410/400) — retrying an erasure wastes the signal. On exhaustion it says *narrow the fan-out*, because a retry is a bandage on a fan-out already too wide. ⚠️ **Untested against the live register** and labelled so in code: brreg publishes no limit and 13,028 real calls at c=8 drew zero 429s. |
 | ✅ | Bulk by array | `orgnrs[]` on all three lookup tools; per-item `{ref, status, ...}`; partial success; dedupes refs. No singular twins. |
 | ✅ | **Freshness policy per read tool** | **No cache at all** — see §Erasure below. Every read is live, so nothing is ever stale. Justified on staleness/erasure risk, not token savings. |
 | N/A | Delta primitive | Cut with reasons (its only consumer is a mirror, which is a non-goal). |
@@ -65,22 +67,22 @@ lives — plus two real misses called out below. Nothing here is a security or c
 | ✅ | Tests exist and run green | **84 fixture (blocking) + 5 live canaries.** Contract + unit + acceptance. |
 | N/A | **[write]** sandbox round-trips | Read-only. |
 | ✅ | Acceptance tests frozen | Two failures this run were **test-fact errors, corrected without weakening an assertion**: a fabricated fnr with an invalid checksum (impl was right), and a case-sensitive regex vs a sentence-initial "Foretaksnavneloven". |
-| ❌ | **CI gates** | **No `.github/workflows/` exists.** No build/typecheck/test gate, no secret scan, no dep audit. |
-| ❌ | **Versioned from commit 1** | `package.json` 0.1.0 is the single version source ✅, but **no `CHANGELOG.md`** and no release tag. |
-| ❌ | **Cross-platform proven** | No CI matrix. Paths are computed and there is no bash interface, so it *should* be portable — but "should" is not the guarantee; green on ubuntu+macos+windows is. |
-| ❌ | **Self-contained Desktop bundle** | No `manifest.json`, no `.mcpb`. Phase 3. |
-| ❌ | **🚪 Release gate — clean-room install from the README** | Not attempted. **Therefore not releasable**, by the checklist's own rule. |
+| ✅ | **CI gates** | Fixed. Three tiers: hermetic (blocking, 3-OS matrix, typecheck+test+build+stdio smoke), supply chain (blocking — `npm audit`, and the secret scan **repointed at committed personal data**, since no tokens exist here), live canary (`continue-on-error` — brreg is a third party, not our merge gate). `npm ci --ignore-scripts`. |
+| ✅ | **Versioned from commit 1** | Fixed. `package.json` 0.1.0 is the single version source; `CHANGELOG.md` added; `LICENSE` added (package.json had claimed MIT with no file). Release tag pending first release. |
+| ⚠️ | **Cross-platform proven** | CI matrix written (ubuntu+macos+windows, Node 22) but **not yet observed green** — the repo has no remote, so Actions has never run. The code has no bash interface and computes no paths (there is no state dir at all), so the risk is low; but "green on all three" is the guarantee, and that hasn't happened yet. |
+| ⚠️ | **Self-contained Desktop bundle** | `manifest.json` added — path variables (`${__dirname}`), `platforms: [darwin, win32, linux]`, no `user_config` (nothing to configure: no credentials, no state dir). Zero external prerequisites: two pure-JS deps, Node supplied by Desktop, nothing shelled out to. **The `.mcpb` itself is not yet packed** (`npm run bundle`). |
+| ✅ | **🚪 Release gate — clean-room install from the README** | **PASSES.** Fresh `git clone` to a temp dir, no `node_modules`, no `dist`; ran the README's Quick Start verbatim → build succeeded → MCP handshake → first tool call returned `filed_no_revenue_line` with `revenue: null`. *A first attempt gave a **false pass** — the clone predated `src/mock.ts`, so `--mock` silently hit the live register and, because 918035443 is a real company, the output looked right. Re-verified after committing: the same orgnr returns `MOCK HOLDING AS` offline vs `DENTAL NORCO I AS` live, and the guards still fire with all egress proxied to a dead port.* |
 
 ## 6. DX & docs
 
 | | Line | Notes |
 |---|---|---|
-| ⚠️ | Clone → tool call in ≤2 commands; `--mock` needs no keys | `npm i && npm run build && node dist/stdio.js` works (verified E2E). **But `--mock` is a lie**: the server accepts the flag and **no tool honours it**, so `npm run dev:mock` silently hits the live API. Harmless here (no keys, read-only) but dishonest — fix or remove the script. |
-| ❌ | Client wiring committed | No `.mcp.json` / Cursor config. |
-| ⚠️ | Docs match code | README is a stub (the "why", not the "how"). No `.env.example` needed — the code reads no env. |
-| ❌ | **README follows the contract** | Missing: 📋 Available Tools table + **CI-checked parity**, 🚀 Quick Start, 🖥️ Claude Desktop install, paths/doctor, 🔄 Updating, version/CHANGELOG pointer. |
+| ✅ | Clone → tool call in ≤2 commands; `--mock` needs no keys | Fixed. `npm install && npm run build`, then `npm run dev:mock`. **`--mock` is now real** — it replaces the socket, not the code path, so every guard and mapper runs unchanged, and its dataset *is* the register's traps. Proven offline two ways (distinct mock names; works with egress dead). |
+| ✅ | Client wiring committed | `.mcp.json` added. |
+| ✅ | Docs match code | README rewritten; CI-checked parity. It also **carried the corrected `""` claim** — a reader implementing that literal writes `if (rev === "")`, which never fires against brreg (the key is *absent*). A test now fails if it returns. No `.env.example` needed — the code reads no env. |
+| ✅ | **README follows the contract** | Fixed: value prop → ✨ Features → 📋 Available Tools (**CI-checked parity**: every tool ↔ one row, every documented param exists) → 🚀 Quick Start → 🖥️ Claude Desktop → paths/state → 🔄 Updating → CHANGELOG pointer. No `doctor` verb: there are no external deps to check. |
 | N/A | `.env.example` names only | No env vars. |
-| ⚠️ | Setup friction beats the first-party alternative | No `.mcpb` yet, so today the alternative (`npx` a competitor) is easier. Phase 3 fixes it. |
+| ⚠️ | Setup friction beats the first-party alternative | Manifest ready; `.mcpb` not yet packed or published, so a competitor's `npx` is still a shorter path today. |
 
 ---
 
@@ -101,12 +103,25 @@ the erasure guarantee. Tests enforce the absence: a repeat lookup re-requests; a
 200 and then 410s returns `gone` on the **next** call; no `src/` module may import `Cache` or write
 to disk.
 
-## Ranked fixes before release
+## Ranked fixes — all seven applied 2026-07-14
 
-1. **429 backoff** (§4) — the one real engineering miss. Implement + label untested.
-2. **CI** (§5) — typecheck/test/audit on ubuntu+macos+windows. Fixture tier blocking, live tier non-blocking.
-3. **`--mock`** (§6) — make it real or delete the script. A flag that lies is worse than no flag.
-4. **README contract + tool-table parity check** (§6).
-5. **`.mcpb` + manifest + `.mcp.json`** (Phase 3).
-6. **CHANGELOG + LICENSE file** (§5) — `package.json` says MIT; there is no LICENSE.
-7. **Clean-room install gate** (§5) — the actual release blocker.
+| # | Fix | |
+|---|---|---|
+| 1 | 429 backoff | ✅ implemented, labelled untested-against-live |
+| 2 | CI | ✅ 3-OS matrix + tiering + PII scan (written, not yet observed green) |
+| 3 | honest `--mock` | ✅ real, proven offline two ways |
+| 4 | README contract + parity | ✅ |
+| 5 | manifest + `.mcp.json` | ✅ (`.mcpb` not yet packed) |
+| 6 | CHANGELOG + LICENSE | ✅ |
+| 7 | clean-room gate | ✅ passes from a cold clone |
+
+**Tests: 106 fixture (blocking) + 5 live canaries.**
+
+## What remains (⚠️, not ❌)
+
+1. **CI has never actually run** — the repo has no remote, so the matrix is unobserved. This is the
+   one claim on this scorecard resting on "should", and the checklist is explicit that green on all
+   three IS the guarantee.
+2. **`.mcpb` not packed** — `npm run bundle` exists; the artifact doesn't.
+3. **NACE table**: 8 of 10 rows verified live; `96.04` and `86.907` are inferred and flagged as such
+   in code, in the reference resource, and in the hint text the agent sees.
