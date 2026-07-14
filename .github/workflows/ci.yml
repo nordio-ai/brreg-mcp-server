@@ -1,0 +1,67 @@
+name: ci
+
+on:
+  push: { branches: [main] }
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Tier 1 — hermetic. Blocks merges. Never touches the network, so brreg's uptime can never
+  # train anyone to ignore a red build.
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The default audience is Claude Desktop, and most of them are on Windows. Green on all
+        # three IS the cross-platform guarantee — you don't need a PC, CI has one.
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts   # postinstall is the live npm attack vector
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      # Proves the .mcpb entry point actually starts and speaks MCP on this OS — a build that
+      # compiles but can't handshake is not a passing build.
+      - name: smoke the stdio entry point (offline)
+        shell: bash
+        run: |
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
+            | node dist/stdio.js --mock 2>/dev/null | grep -q '"brreg-mcp"'
+
+  # Tier 2 — supply chain. Blocks merges: there are no secrets to scan for, but a committed
+  # person's name is the thing this must catch.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci --ignore-scripts
+      - name: dependency audit
+        run: npm audit --audit-level=high
+      - name: no real personal data in fixtures
+        run: node bin/check-no-pii.mjs
+
+  # Tier 3 — live canary. NON-blocking by design: brreg is a third party and its availability
+  # is not our merge gate. It exists to tell us when the REGISTER changed under us.
+  canary:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci --ignore-scripts
+      - run: BRREG_LIVE=1 npx vitest run tests/live

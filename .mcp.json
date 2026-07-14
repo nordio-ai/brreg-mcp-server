@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "brreg": {
+      "command": "node",
+      "args": ["./dist/stdio.js"]
+    }
+  }
+}

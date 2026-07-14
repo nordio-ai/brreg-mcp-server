@@ -91,6 +91,47 @@ export interface FetchOptions {
   /** Injected in tests so a fetch-spy can prove "no HTTP call was made". */
   fetchImpl?: typeof fetch;
   signal?: AbortSignal;
+  /** Test seam: bypass real waiting. */
+  sleepImpl?: (ms: number) => Promise<void>;
+  maxAttempts?: number;
+}
+
+/**
+ * Retry policy for 429 / 5xx.
+ *
+ * ⚠️ THIS PATH IS UNTESTED AGAINST THE LIVE REGISTER. brreg documents no rate limit, and a real run
+ * of 13,028 lookups at concurrency 8 drew **zero 429s and zero errors**. That is evidence we did not
+ * hit a limit at c=8 — not evidence that no limit exists, and not a safe ceiling. The absence of a
+ * documented number is not permission.
+ *
+ * So this exists on the principle that the failure mode of NOT having it (an agent loop hammering a
+ * public registry until brreg blocks Frank's IP) is far worse than the cost of carrying it. It is
+ * exercised only by fixtures. If you ever see a real 429, tighten DEFAULT_CONCURRENCY first — a
+ * retry is a bandage on a fan-out that is already too wide.
+ */
+const MAX_ATTEMPTS = 3;
+const BASE_DELAY_MS = 500;
+const MAX_DELAY_MS = 8_000;
+
+const defaultSleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** Honour Retry-After when brreg sends it (seconds, or an HTTP-date); else exponential backoff. */
+export function retryDelayMs(res: Response, attempt: number, now = Date.now()): number {
+  const header = res.headers.get("retry-after");
+  if (header) {
+    const secs = Number(header);
+    if (Number.isFinite(secs) && secs >= 0) return Math.min(secs * 1000, MAX_DELAY_MS);
+    const when = Date.parse(header);
+    if (!Number.isNaN(when)) return Math.min(Math.max(0, when - now), MAX_DELAY_MS);
+  }
+  // Exponential, with jitter so a bounded fan-out doesn't retry in a synchronised thundering herd.
+  const backoff = Math.min(BASE_DELAY_MS * 2 ** attempt, MAX_DELAY_MS);
+  return backoff + Math.floor(Math.random() * 250);
+}
+
+/** 429 and 5xx are worth retrying. 4xx (bad orgnr, 404, 410) are answers — never retry an answer. */
+export function isRetryable(status: number): boolean {
+  return status === 429 || (status >= 500 && status < 600);
 }
 
 /**
@@ -102,21 +143,43 @@ export interface FetchOptions {
  */
 export async function brregGet<T>(url: URL, opts: FetchOptions = {}): Promise<Result<T>> {
   const doFetch = opts.fetchImpl ?? fetch;
+  const sleep = opts.sleepImpl ?? defaultSleep;
+  const maxAttempts = opts.maxAttempts ?? MAX_ATTEMPTS;
 
   if (url.origin !== BRREG_ORIGIN) {
     throw new BrregHttpError(`refusing to leave ${BRREG_ORIGIN}: ${url.origin}`);
   }
 
   let res: Response;
-  try {
-    res = await doFetch(url, {
-      // Explicit: the endpoint content-negotiates six types including turtle and rdf+xml.
-      headers: { accept: "application/json", "user-agent": USER_AGENT },
-      redirect: "manual",
-      signal: opts.signal,
-    });
-  } catch (e) {
-    return { status: "error", reason: "upstream", message: `network error: ${(e as Error).message}` };
+  let attempt = 0;
+
+  for (;;) {
+    try {
+      res = await doFetch(url, {
+        // Explicit: the endpoint content-negotiates six types including turtle and rdf+xml.
+        headers: { accept: "application/json", "user-agent": USER_AGENT },
+        redirect: "manual",
+        signal: opts.signal,
+      });
+    } catch (e) {
+      return { status: "error", reason: "upstream", message: `network error: ${(e as Error).message}` };
+    }
+
+    if (!isRetryable(res.status) || attempt >= maxAttempts - 1) break;
+    await sleep(retryDelayMs(res, attempt));
+    attempt++;
+  }
+
+  // Retries exhausted on a rate limit — say so precisely. "Register returned HTTP 429" would leave
+  // the agent guessing whether to retry; it must not, and the fan-out is the thing to narrow.
+  if (res.status === 429) {
+    return {
+      status: "error",
+      reason: "upstream",
+      message:
+        `Rate-limited by the register after ${maxAttempts} attempts. Reduce the batch size or ` +
+        `concurrency rather than retrying — this is a public registry with no published quota.`,
+    };
   }
 
   if (res.status >= 300 && res.status < 400) {

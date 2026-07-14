@@ -1,0 +1,38 @@
+{
+  "manifest_version": "0.3",
+  "name": "brreg-mcp-server",
+  "display_name": "Norwegian Business Register (brreg)",
+  "version": "0.1.0",
+  "description": "Look up Norwegian companies, roles and annual accounts from Brønnøysundregistrene — with the register's silent traps handled instead of passed through.",
+  "long_description": "Brønnøysundregistrene's open API is free and keyless, but it fails quietly: retired industry codes return zero results with no error, holding companies file no revenue line, ~96% of units report no employee count, and sole proprietorships have no board. Each of those produces a confident wrong answer. This connector encodes them, adds annual accounts (which no other brreg connector covers), and returns no personal names unless you ask.",
+  "author": { "name": "Nordio AI", "url": "https://github.com/nordio-ai" },
+  "homepage": "https://github.com/nordio-ai/brreg-mcp-server",
+  "documentation": "https://github.com/nordio-ai/brreg-mcp-server#readme",
+  "support": "https://github.com/nordio-ai/brreg-mcp-server/issues",
+  "license": "MIT",
+  "server": {
+    "type": "node",
+    "entry_point": "dist/stdio.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/stdio.js"],
+      "env": { "LOG_LEVEL": "info" }
+    }
+  },
+  "tools": [
+    { "name": "get_units", "description": "Look up Norwegian companies or branches by organisation number." },
+    { "name": "search_units", "description": "Search the register by industry, municipality, name, org form or VAT registration." },
+    { "name": "get_roles", "description": "Board, management and sole-proprietor owner. No personal names unless requested." },
+    { "name": "get_financials", "description": "Annual accounts from regnskapsregisteret." }
+  ],
+  "prompts": [
+    { "name": "company_due_diligence", "description": "Full picture for one Norwegian company, read with the register's traps in mind." }
+  ],
+  "tools_generated": false,
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": { "node": ">=20.0.0" }
+  },
+  "keywords": ["brreg", "norway", "norwegian", "business-register", "enhetsregisteret", "regnskap", "company-data", "due-diligence"]
+}

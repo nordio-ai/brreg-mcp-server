@@ -1,29 +1,103 @@
 # brreg-mcp-server
 
-> Norwegian business register (Brønnøysundregistrene) for AI agents — companies, roles, subunits
-> and **annual accounts**, with the register's silent traps encoded as guards.
+> The Norwegian business register for AI agents — companies, roles, subunits and **annual accounts** — with the register's silent traps encoded as guards.
 
-**Status: in development (Phase 0 — kernel).** Not yet usable.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](package.json)
 
-## Why
+Brønnøysundregistrene's API is free, public and keyless. Fetching from it is easy — a 40-line script does it, faster than any MCP will. **The problem is that the register lies quietly**, and every trap returns a plausible number instead of an error:
 
-brreg's API is free, public and keyless — a 40-line script can fetch from it, faster than any MCP
-will. The problem isn't fetching. It's that **the register's traps are silent**:
+```
+naeringskode=96.02   →  totalElements: 0        # "no hairdressers in Oslo"?
+naeringskode=96.210  →  totalElements: 1283     # the code was renumbered. No error. No warning.
+```
 
-- `naeringskode=96.02` returns **0 hits and HTTP 200**. It reads as "there are no hairdressers in
-  Oslo". The code was retired — the whole `96.0x` branch renumbered to `96.2x`. `96.210` returns 1,283.
-- `driftsinntekter` comes back as `""` for holding companies (income sits in subsidiaries). In
-  JavaScript, `"" >= 3_000_000` is `false` and raises nothing — silently deleting every holding
-  company from a revenue filter.
-- `antallAnsatte` is absent ~96% of the time, and the minimum non-empty value is **5** — no company
-  reports 1–4. Read `0` as "no employees" and you're wrong.
-- ENKs have no board and no daglig leder — the owner is `INNH`. Read only `DAGL`/`LEDE` and you're
-  blind to ~78% of Norwegian small business.
-- The VAT filter is a great liveness proxy for beauty/fitness and **deletes ~94% of real clinics**,
-  because Norwegian health services are VAT-exempt.
+That is the whole reason this exists.
 
-Every one of those produces a *confident wrong answer*. This server encodes them.
+## ✨ Features
+
+- **Annual accounts** (`regnskapsregisteret`) — no other public brreg MCP covers them.
+- **Retired-NACE guard** — a zero result arrives with a hint naming the current code and its live match count. The query is never silently rewritten.
+- **`filed_no_revenue_line`** — holding companies file `driftsinntekter: {}` (the key is *absent*, not zero, and not `""`). A `revenue >= X` filter silently deletes every one of them; this status is how you notice.
+- **`antallAnsatte: null`, never `0`** — ~96% of units report no headcount, and the minimum non-empty value is 5. Absent ≠ zero.
+- **`INNH` resolution** — sole proprietorships have no board and no daglig leder. Looking only for `DAGL`/`LEDE` makes ~78% of Norwegian small business look contactless.
+- **VAT-sector warning** — `registrertIMvaregisteret` is a fine liveness proxy, except under NACE 86.\* (health is VAT-exempt) where it deletes ~94% of real clinics.
+- **`valuta` never assumed** — Equinor files in USD.
+- **Privacy by default** — no personal names unless you ask; birth dates never, even if you do.
+- **Bulk by array** — one call for many orgnrs, per-item partial success.
+- **No cache, no state, no telemetry** — one outbound host, `data.brreg.no`.
+
+## 📋 Available Tools
+
+| Tool | Does | Key params |
+|---|---|---|
+| `get_units` | Look up companies/branches by orgnr; resolves main-vs-branch for you and returns `unit_type` | `orgnrs` |
+| `search_units` | Search by industry, municipality, name, org form or VAT; internally paginated, carries the guards | `nace`, `kommune`, `navn`, `org_form`, `registrertIMvaregisteret`, `strict_location`, `cap` |
+| `get_roles` | Board, management and sole-proprietor owner. Structure only by default | `orgnrs`, `include_persons` |
+| `get_financials` | Annual accounts, as a discriminated union you must read before the numbers | `orgnrs`, `statement_type` |
+
+## 🚀 Quick Start
+
+```bash
+npm install && npm run build
+npm run dev:mock          # real offline mode — no network, every guard live
+```
+
+`--mock` is not a stub: it swaps the socket, not the code path, and its dataset **is** the register's traps (a USD filer, a holding company with no revenue line, an ENK, a dissolved unit, a 410, a retired NACE code). Everything on this page reproduces offline.
+
+## 🖥️ Claude Desktop
+
+Download the `.mcpb` from [Releases](https://github.com/nordio-ai/brreg-mcp-server/releases) and double-click it. No terminal, no Node install, no API key — brreg needs no credentials.
+
+<details>
+<summary>Claude Code / Cursor / any stdio client</summary>
+
+`.mcp.json` is committed:
+
+```json
+{ "mcpServers": { "brreg": { "command": "node", "args": ["./dist/stdio.js"] } } }
+```
+</details>
+
+## 💬 Try it
+
+> "Look up 923609016 and tell me what the accounts say."
+>
+> "Find hairdressers in Oslo, NACE 96.02." — *watch it catch the retired code*
+>
+> "Which of these 50 companies has a real operator and filed accounts?"
+
+## 🔍 Read this before trusting a number
+
+| You see | It means |
+|---|---|
+| `total: 0` | **Maybe not "none exist."** Check `hints` — the NACE code may be retired. |
+| `driftsinntekter: null` + `filed_no_revenue_line` | Accounts filed, no operating revenue line. A holding company. **Not** zero revenue. |
+| `status: not_applicable` | An ENK. Sole proprietorships never file. **Not** a red flag. |
+| `antallAnsatte: null` | The register has no headcount (~96% of units). **Not** zero employees. |
+| `valuta: "USD"` | It happens. Never compare revenue across companies without reading it. |
+| `deleted` vs `gone` vs `not_found` | Dissolved · removed on legal grounds · never existed. Three different facts. |
+
+Read `brreg://reference` for the field glossary (with statutory sources), the retired-NACE table, and role codes.
+
+## 📂 Paths & state
+
+**None.** No config, no cache, no logs on disk, no state directory. Every read is live.
+
+That is deliberate. brreg's documentation treats HTTP 410 as *"en forespørsel om at eventuelle kopier/cacher også fjerner den aktuelle enheten"* — an instruction to purge, not a status code. A cache is exactly what turns that into an obligation you can silently fail: the request that would reveal the erasure is the one a cache promises not to make. For an interactive connector caching buys almost nothing, so there isn't any — and a test fails if someone adds one.
+
+## 🔄 Updating
+
+Re-download the `.mcpb` from Releases. Version lives in `package.json`; see [CHANGELOG.md](CHANGELOG.md).
+
+## Scope
+
+Interactive discovery and targeted enrichment — tens to a couple of hundred results. **Register-scale extraction (thousands of rows) is a non-goal**: an MCP returns data through the model's context window, so a script will always win at that size. Use the API directly.
+
+Also out of scope: kunngjøringer (no open REST API exists), fødselsnummer (needs Maskinporten), writes (brreg is read-only), and anything feeding a creditworthiness decision (that engages EU AI Act Annex III 5(b)).
 
 ## Licence
 
-MIT. Not affiliated with Brønnøysundregistrene. Data © Brønnøysundregistrene, [NLOD](https://data.norge.no/nlod/no/2.0).
+MIT. Not affiliated with Brønnøysundregistrene.
+
+Data © Brønnøysundregistrene, [NLOD 2.0](https://data.norge.no/nlod/no/2.0). **NLOD is a copyright licence and explicitly excludes personal data** — it is not a legal basis for processing the names in this register. If you bulk-harvest role data, you are the controller: you need your own basis (GDPR Art 6(1)(f)), an Art 14 notice at first contact, and an Art 21(2) suppression list. And note that ENK names are people — foretaksnavneloven §2-2 requires a sole proprietorship's registered name to contain the owner's surname, and ~74% of the register are ENKs.
