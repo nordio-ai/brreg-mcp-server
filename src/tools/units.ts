@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { readOnlyExternal, type ToolDef } from "@nordio/server-kit";
 import { brregGet, buildUrl, fanOut, seg, type ItemResult, type Result } from "../http.js";
-import { orgnr } from "../schemas.js";
+import { orgnr, isNaturalPerson } from "../schemas.js";
 
 /**
  * get_units — lookup by orgnr.
@@ -27,6 +27,16 @@ export interface Unit {
   navn?: string;
   organisasjonsform?: string;
   unit_type: UnitType;
+  /**
+   * True for ENK. Foretaksnavneloven §2-2 REQUIRES a sole proprietorship's registered name to
+   * contain the owner's surname — so for ~74% of the register `navn` IS a natural person and
+   * `forretningsadresse` is frequently a home address.
+   *
+   * We cannot withhold the name (it is the company's name, and it is what was asked for), so the
+   * honest control is to SAY SO. get_roles gates names behind include_persons; this is the
+   * equivalent signal for the tools that cannot gate.
+   */
+  is_natural_person: boolean;
   /** null when brreg never published a headcount — NEVER 0. See antallAnsatte_reported. */
   antallAnsatte?: number | null;
   /**
@@ -73,6 +83,7 @@ export function mapUnit(raw: RawUnit, unitType: UnitType): Unit {
     navn: raw.navn,
     organisasjonsform: raw.organisasjonsform?.kode,
     unit_type: unitType,
+    is_natural_person: isNaturalPerson(raw.organisasjonsform?.kode),
     // absent → null, never 0. Same rule as sumDriftsinntekter; same reason.
     antallAnsatte: reported ? raw.antallAnsatte! : null,
     antallAnsatte_reported: reported,
@@ -133,7 +144,10 @@ export function makeUnitsTool(deps: UnitsDeps = {}): ToolDef {
       "  • A dissolved company returns an error with reason `deleted` plus its slettedato; one removed " +
       "for legal reasons returns reason `gone`. Neither is the same as `not_found`.\n\n" +
       "brreg supplies no email and no phone — those fields do not exist. `hjemmeside` is present ~9% " +
-      "of the time.",
+      "of the time.\n\n" +
+      "`is_natural_person: true` means the unit is a sole proprietorship (ENK) and its NAME IS A " +
+      "PERSON'S NAME — Norwegian law requires it to contain the owner's surname, and the address is " +
+      "often their home. ~74% of the register. Treat those records as personal data.",
     inputSchema: {
       orgnrs: z.array(orgnr).min(1).max(200).describe("9-digit orgnrs. One call handles many."),
     },

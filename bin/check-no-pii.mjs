@@ -38,9 +38,27 @@ for (const file of [...walk("src"), ...walk("tests")]) {
       bad++;
     }
   }
-  for (const m of text.matchAll(/"(fornavn|etternavn)":\s*"([^"]+)"/g)) {
-    console.error(`❌ ${file}: raw person name field — use the synthetic fixtures: ${m[2]}`);
-    bad++;
+  // The regex previously required QUOTED keys ("fornavn":). Every fixture is a TypeScript object
+  // literal with UNQUOTED keys (fornavn:), so it matched nothing, in any file, ever — and printed
+  // ✅ while a real board member's name sat in the repo. ALLOWED was written to suppress the
+  // synthetic names and was never referenced, which is the fingerprint of a check that never fired.
+  // Now: key optionally quoted, and ALLOWED actually consulted.
+  const names = [...text.matchAll(/\b"?(fornavn|etternavn)"?\s*:\s*"([^"]+)"/g)];
+  for (let i = 0; i < names.length; i++) {
+    const value = names[i][2];
+    // A template placeholder is not a name. Without this the checker flags its own self-test,
+    // which writes a fixture via `fornavn: "${planted[0]}"`.
+    if (value.includes("${")) continue;
+    // Names come in fornavn/etternavn pairs; test the pair, since "Ola" alone is not identifying.
+    const partner = names[i + 1]?.[1] === "etternavn" ? names[i + 1][2] : undefined;
+    const full = partner ? `${value} ${partner}` : value;
+    const allowed = ALLOWED.some((a) => a === full || a.split(" ").includes(value));
+    if (!allowed) {
+      console.error(`❌ ${file}: person name not in the synthetic allowlist: "${full}"`);
+      console.error(`   Real names must never enter this repo — git is the least-erasable store`);
+      console.error(`   there is, and a committed name defeats brreg's 410 erasure request forever.`);
+      bad++;
+    }
   }
 }
 console.log(bad === 0 ? "✅ no real personal data in src/ or tests/" : `❌ ${bad} finding(s)`);

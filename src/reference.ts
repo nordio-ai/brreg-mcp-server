@@ -1,5 +1,5 @@
 import type { ResourceDef, PromptDef } from "@nordio/server-kit";
-import { RETIRED, NACE_SOURCE_URL, NACE_TABLE_VERSION } from "./nace.js";
+import { RETIRED, NACE_SOURCE_URL, NACE_SOURCE_NAME, NACE_ENTRY_COUNT } from "./nace.js";
 import { ROLE_CODES } from "./tools/roles.js";
 
 /**
@@ -93,52 +93,43 @@ home address. \`organisasjonsform === "ENK"\` is the marker.
 `;
 
 const naceSection = (): string => {
-  const rows = [...RETIRED.entries()]
-    .map(
-      ([code, r]) =>
-        `| \`${code}\` | ${r.successors.map((s) => `\`${s}\``).join(" + ")} | ${r.verified ? "verified live" : "**inferred — unconfirmed**"} | ${r.note} |`,
-    )
+  // Show the codes an agent is most likely to hit, not all 834 — the table is queried by the
+  // guard, not read by the model. Full detail is one lookup away.
+  const notable = ["96.02", "86.90", "86.901", "86.902", "86.907", "86.909", "96.04"];
+  const rows = notable
+    .map((code) => {
+      const r = RETIRED.get(code);
+      if (!r) return null;
+      return `| \`${code}\` | ${r.oldName} | ${r.successors.map((s, i) => `\`${s}\` (${r.newNames[i] ?? "?"})`).join(" · ")} |`;
+    })
+    .filter(Boolean)
     .join("\n");
 
   return `
-## NACE / SN2007 — the retired-code trap
+## NACE — the retired-code trap
 
-Source: **SSB Standard for næringsgruppering (SN2007)** — ${NACE_SOURCE_URL}
-Table version: ${NACE_TABLE_VERSION} · ${RETIRED.size} retired codes catalogued.
+**brreg serves SN2025.** The previous standard, SN2007, expired 2025-01-01 (superseded 2025-09-01).
+A code from the old standard returns **\`totalElements: 0\` with HTTP 200** — no error, and
+indistinguishable from "there are no such businesses" unless you know the code moved.
 
-A retired code returns **\`totalElements: 0\` with HTTP 200**. No error. It is indistinguishable
-from "there are no such businesses" unless you know the code moved.
+Prefix matching *hides* it: \`85.51\` resolves to \`85.510\` fine, so \`96.02\` looks like it should
+work too. It doesn't — the whole \`96.0x\` branch became \`96.2x\`.
 
-Prefix matching *hides* this: \`85.51\` resolves to \`85.510\` fine, so \`96.02\` looks like it should
-work too. It doesn't — the whole \`96.0x\` branch was renumbered to \`96.2x\`.
+Source: **${NACE_SOURCE_NAME}**
+${NACE_SOURCE_URL}
+${RETIRED.size} renumbered codes, generated from ${NACE_ENTRY_COUNT} SSB correspondence entries.
+*(Note the source is the SN2025↔SN2007 correspondence table, not SN2007 itself — SN2007 cannot
+document its own supersession, and citing it was a real defect in an earlier version of this file.)*
 
-| Retired | Current | Status | Note |
-|---|---|---|---|
+Commonly hit:
+
+| Retired (SN2007) | Was | Now (SN2025) |
+|---|---|---|
 ${rows}
 
-**Detecting an uncatalogued retirement:** a 4-digit code returning 0 while its 2-digit parent
-returns thousands means the branch was renumbered. Probe the parent.
-
-### Live Oslo counts (2026-07-14) — useful current codes
-
-| Code | Description | Oslo |
-|---|---|---|
-| \`96.210\` | Frisering og barbering (hairdressing) | 1,283 |
-| \`96.220\` | Skjønnhetspleie (beauty treatment) | 1,186 |
-| \`96.230\` | Dagspa, badstue og dampbad | 451 |
-| \`86.960\` | Tradisjonell/alternativ medisin | 625 |
-| \`93.130\` | Treningssentervirksomhet (gyms) | 234 |
-| \`85.510\` | Undervisning i idrett og rekreasjon | 2,941 |
-| \`93.120\` | Idrettslag og -klubber | 1,346 |
-| \`86.210\` | Allmennlegetjenester (GPs) | 3,408 |
-| \`86.221\` | Spesialiserte legetjenester | 972 |
-| \`86.222\` | Psykiatriske legetjenester | 200 |
-| \`86.230\` | Tannlegetjenester (dentists) | 1,301 |
-| \`86.930\` | Psykolog- og psykoterapitjenester | 1,844 |
-| \`86.950\` | Fysioterapi- og ergoterapitjenester | 1,149 |
-| \`86.991\` | Ortopedi- og fotterapitjenester | 120 |
-| \`86.992\` | Forebyggende helsearbeid | 479 |
-| \`86.993\` | Andre helsetjenester ellers | 1,647 |
+**\`search_units\` detects this automatically** — you do not need this table to avoid the trap. It
+is here so you can see what a code *meant* before it moved, which matters when one old code split
+across several new ones and you have to pick.
 
 ## The VAT filter is sector-dependent
 
@@ -152,6 +143,8 @@ very businesses you are looking for:
 | Helse (86.*) | 9,049 | **561** | real doctors deleted |
 | Psykolog (86.93*) | 2,044 | **107** | real psychologists deleted |
 | Skjønnhet (96.2*) | 1,362 | 1,362 | unaffected — filter is good here |
+
+*(Counts measured 2026-07 on one Oslo run — illustrative of the ratio, not current totals.)*
 
 **Use it for 96.x and 93.x. Never for 86.x.**
 `;

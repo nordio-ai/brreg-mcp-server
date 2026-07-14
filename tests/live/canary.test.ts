@@ -44,7 +44,7 @@ describe("[live] the register still behaves as the guards assume", () => {
    * If this ever reads NOK, someone has hardcoded currency again.
    */
   it("Equinor still files in USD — currency is never NOK-by-default", async () => {
-    const res = await fetchFinancials(EQUINOR);
+    const res = await fetchFinancials(EQUINOR, undefined);
     expect(res.status).toBe("ok");
     if (res.status !== "ok") return;
     expect(res.data.status).toBe("filed");

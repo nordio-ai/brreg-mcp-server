@@ -27,7 +27,8 @@ export interface SearchResult {
   units: Unit[];
   total: number;
   returned: number;
-  cursor?: { page: number } | null;
+  /** `total > returned`. Narrow the selector — this tool does not paginate beyond one request. */
+  truncated: boolean;
   hints: SearchHint[];
 }
 
@@ -112,49 +113,64 @@ export async function searchUnits(p: SearchParams, deps: SearchDeps = {}): Promi
       hints.push({
         kind: "retired_nace",
         message:
-          `${normalise(p.nace)} is a RETIRED SN2007 code and matches nothing — this zero does not mean ` +
-          `there are no such businesses. ${retired.note} Re-run with a successor code.` +
-          (retired.verified ? "" : " (This mapping is inferred, not confirmed against the live register.)"),
+          `${normalise(p.nace)} ("${retired.oldName}") is a RETIRED SN2007 code — brreg serves SN2025, so ` +
+          `it matches nothing. This zero does NOT mean there are no such businesses. Current code(s): ` +
+          retired.successors.map((s, i) => `${s} ("${retired.newNames[i] ?? "?"}")`).join(", ") +
+          `. Re-run with the one you meant.`,
         successors: retired.successors,
         successor_match_count: successorCount,
       });
     }
   }
 
-  // Internal pagination: the agent is never asked to loop (§12 control-flow-by-prose).
-  let page = 1;
-  while (units.length < Math.min(total, cap) && page < totalPages) {
-    if ((page + 1) * PAGE_SIZE > DEEP_PAGE_CEILING) {
-      hints.push({
-        kind: "narrow_selector",
-        message:
-          `Result set exceeds brreg's ~${DEEP_PAGE_CEILING}-record deep-paging ceiling. Narrow the ` +
-          `selector (add kommune, org_form or a tighter NACE) rather than paging further.`,
-      });
-      break;
-    }
-    const next = await fetchPage(p, page, PAGE_SIZE, deps);
-    if (next.status === "error") break;
-    units.push(
-      ...((next.data._embedded?.enheter ?? []) as Record<string, never>[]).map((u) => mapUnit(u, "hovedenhet")),
-    );
-    page++;
-  }
-
+  // NOTE: there is no pagination loop, and that is deliberate.
+  //
+  // There used to be one. It could never execute: `cap` is capped at 1000 and PAGE_SIZE is 1000,
+  // so the first request already asks for `size = min(1000, cap) = cap` and returns min(total, cap)
+  // units — making the loop condition `units.length < min(total, cap)` literally `x < x`. Dead code
+  // wearing the name of a feature, with the deep-paging hint stranded inside it.
+  //
+  // One request, size = cap, is the whole implementation. The agent still never loops — that
+  // property was always delivered by `size=cap`, not by the loop. Scope is interactive discovery
+  // (N≈20-200); register-scale extraction is an explicit non-goal, so a cursor would be surface
+  // with no user.
   let out = units.slice(0, cap);
+
+  // Reachable now that it isn't buried in a loop that can't run.
+  if (total > cap) {
+    hints.push({
+      kind: "narrow_selector",
+      message:
+        `${total} units match but only ${out.length} were returned (cap=${cap}, max 1000). This tool is for ` +
+        `interactive discovery, not whole-register extraction. Narrow the selector — add kommune, ` +
+        `org_form, or a more specific NACE code.` +
+        (total > DEEP_PAGE_CEILING
+          ? ` Note brreg also hard-fails past ~${DEEP_PAGE_CEILING} records, so paging is not an option here.`
+          : ""),
+    });
+  }
 
   // Guard: kommunenummer leaks ~2.2% — brreg matches an address that isn't necessarily
   // forretningsadresse. Opt-in post-filter rather than a silent correction.
-  if (p.strict_location && p.kommune) {
-    const before = out.length;
-    out = out.filter((u) => u.kommunenummer === p.kommune);
-    if (out.length < before) {
+  if (p.kommune) {
+    if (p.strict_location) {
+      const before = out.length;
+      out = out.filter((u) => u.kommunenummer === p.kommune);
       hints.push({
         kind: "kommune_leak",
         message:
-          `Dropped ${before - out.length} unit(s) whose forretningsadresse is outside kommune ${p.kommune}. ` +
-          `brreg's kommunenummer filter matches an address that is not always the business address ` +
-          `(~2.2% leakage measured).`,
+          `strict_location: dropped ${before - out.length} of ${before} unit(s) whose forretningsadresse ` +
+          `is outside kommune ${p.kommune}.`,
+      });
+    } else {
+      // ALWAYS warn. The agent that needed this is precisely the one that didn't set the flag —
+      // the same reason `resolve_nace` was cut as a tool. Warn always, act on request.
+      hints.push({
+        kind: "kommune_leak",
+        message:
+          `brreg's kommunenummer filter matches an address that is not always the forretningsadresse, ` +
+          `so ~2.2% of results may sit outside kommune ${p.kommune} (measured: 416 of 19,173 in Oslo). ` +
+          `Pass strict_location: true to drop them.`,
       });
     }
   }
@@ -165,7 +181,8 @@ export async function searchUnits(p: SearchParams, deps: SearchDeps = {}): Promi
       units: out,
       total,
       returned: out.length,
-      cursor: total > out.length ? { page } : null,
+      /** True when `total` exceeds what was returned. There is no cursor — see the note above. */
+      truncated: total > out.length,
       hints,
     },
   };

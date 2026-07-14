@@ -17,7 +17,7 @@ function spy(status: number, body: unknown) {
 
 describe("[fixture] get_financials — the discriminated union", () => {
   it("AS with accounts → filed, with every field surfaced", async () => {
-    const res = await fetchFinancials("999999991", { fetchImpl: spy(200, SMALL_AS_NOK), now: NOW });
+    const res = await fetchFinancials("999999991", undefined, { fetchImpl: spy(200, SMALL_AS_NOK), now: NOW });
     expect(res.status).toBe("ok");
     if (res.status !== "ok") return;
     expect(res.data).toMatchObject({
@@ -41,7 +41,7 @@ describe("[fixture] get_financials — the discriminated union", () => {
    * prevent: a filter deleting every holding company in the market.
    */
   it("holding company with driftsinntekter:{} → filed_no_revenue_line, revenue null — NEVER 0", async () => {
-    const res = await fetchFinancials("918035443", {
+    const res = await fetchFinancials("918035443", undefined, {
       fetchImpl: spy(200, HOLDING_NO_REVENUE_LINE),
       now: NOW,
     });
@@ -61,7 +61,7 @@ describe("[fixture] get_financials — the discriminated union", () => {
   });
 
   it("a `revenue >= 3M` filter would drop the holding company — null is falsy, so the reason must be readable", async () => {
-    const res = await fetchFinancials("918035443", {
+    const res = await fetchFinancials("918035443", undefined, {
       fetchImpl: spy(200, HOLDING_NO_REVENUE_LINE),
       now: NOW,
     });
@@ -75,7 +75,7 @@ describe("[fixture] get_financials — the discriminated union", () => {
 
   it("ENK → not_applicable, and NO http call is made", async () => {
     const fetchImpl = spy(200, SMALL_AS_NOK);
-    const res = await fetchFinancials("999999992", {
+    const res = await fetchFinancials("999999992", undefined, {
       fetchImpl,
       lookupOrgForm: async () => "ENK",
       now: NOW,
@@ -88,14 +88,14 @@ describe("[fixture] get_financials — the discriminated union", () => {
   });
 
   it("AS that never filed → not_filed, distinct from not_applicable", async () => {
-    const res = await fetchFinancials("999999993", { fetchImpl: spy(404, {}), now: NOW });
+    const res = await fetchFinancials("999999993", undefined, { fetchImpl: spy(404, {}), now: NOW });
     expect(res.status).toBe("ok");
     if (res.status !== "ok") return;
     expect(res.data.status).toBe("not_filed");
   });
 
   it("empty filing array → not_filed", async () => {
-    const res = await fetchFinancials("999999994", { fetchImpl: spy(200, []), now: NOW });
+    const res = await fetchFinancials("999999994", undefined, { fetchImpl: spy(200, []), now: NOW });
     if (res.status !== "ok") throw new Error("expected ok");
     expect(res.data.status).toBe("not_filed");
   });

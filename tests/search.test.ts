@@ -35,10 +35,18 @@ describe("[fixture] search_units — the retired-NACE guard", () => {
     expect(hint!.message).toMatch(/does not mean there are no such businesses/i);
   });
 
-  /** The probe must not fire on a legitimately empty search, or every empty costs 2 calls. */
-  it("a generic zero-result fires NO successor probe — exactly one upstream call", async () => {
+  /**
+   * The probe must not fire on a legitimately empty search, or every empty costs 2 calls.
+   *
+   * This test originally used `56.101` as its "obviously current" code. It isn't: 56.101 is
+   * "Drift av restauranter og kafeer", retired to 56.110, and brreg returns 0 for it — so the
+   * guard was right and the test was wrong. The trap caught the test written to check the trap.
+   * Use a code verified present in the SN2025 list instead.
+   */
+  it("a genuinely current code with no matches fires NO successor probe — exactly one call", async () => {
     const fetchImpl = vi.fn(async () => page(0, 0));
-    const res = await searchUnits({ nace: "56.101", kommune: "5001" }, { fetchImpl });
+    // 56.110 is current in SN2025 — it is what 56.101 became. An empty result here means empty.
+    const res = await searchUnits({ nace: "56.110", kommune: "5001" }, { fetchImpl });
     expect(res.status).toBe("ok");
     if (res.status !== "ok") return;
     expect(res.data.hints.find((h) => h.kind === "retired_nace")).toBeUndefined();
@@ -56,12 +64,17 @@ describe("[fixture] search_units — the retired-NACE guard", () => {
     expect(urls[0]).toContain("naeringskode=96.02"); // asked as asked
   });
 
-  it("flags an inferred mapping as unconfirmed rather than passing it off as measured", async () => {
+  it("names what the OLD code meant and what each successor means — a split must be choosable", async () => {
+    // Replaces a test that asserted an "inferred" disclaimer. There are no inferred rows now:
+    // every row comes from SSB, so the provenance IS the verification.
     let call = 0;
     const fetchImpl = vi.fn(async () => (++call === 1 ? page(0, 0) : page(5, 1)));
-    const res = await searchUnits({ nace: "96.04" }, { fetchImpl });
+    const res = await searchUnits({ nace: "86.909" }, { fetchImpl });
     if (res.status !== "ok") throw new Error("expected ok");
-    expect(res.data.hints.find((h) => h.kind === "retired_nace")!.message).toMatch(/inferred/i);
+    const hint = res.data.hints.find((h) => h.kind === "retired_nace")!;
+    expect(hint.message).toMatch(/Andre helsetjenester/i);   // what you asked for
+    expect(hint.successors!.length).toBe(7);                  // it split seven ways
+    expect(hint.message).toMatch(/86\.950/);                  // and each one is named
   });
 });
 
@@ -96,41 +109,59 @@ describe("[fixture] search_units — the MVA sector guard", () => {
     expect(res.data.hints.find((h) => h.kind === "vat_exempt_sector")).toBeUndefined();
   });
 
-  it("86.* WITHOUT the MVA filter → no warning (nothing to warn about)", async () => {
-    const fetchImpl = vi.fn(async () => page(9049, 10));
-    const res = await searchUnits({ nace: "86.210" }, { fetchImpl });
+  it("86.* WITHOUT the MVA filter → no VAT warning (nothing to warn about)", async () => {
+    const fetchImpl = vi.fn(async () => page(9049, 10, 1));
+    const res = await searchUnits({ nace: "86.210", cap: 200 }, { fetchImpl });
     if (res.status !== "ok") throw new Error("expected ok");
-    expect(res.data.hints).toHaveLength(0);
+    expect(res.data.hints.find((h) => h.kind === "vat_exempt_sector")).toBeUndefined();
   });
 });
 
-describe("[fixture] search_units — pagination is the server's job", () => {
-  it("3 pages of matches → one tool call, agent never loops", async () => {
-    let call = 0;
-    const fetchImpl = vi.fn(async () => {
-      call++;
-      return page(2500, 1000, 3);
-    });
-    const res = await searchUnits({ nace: "96.210", cap: 2500 }, { fetchImpl });
-    if (res.status !== "ok") throw new Error("expected ok");
-    expect(fetchImpl.mock.calls.length).toBeGreaterThan(1); // we looped, not the model
-    expect(res.data.returned).toBeGreaterThan(1000);
-  });
-
-  it("bounds the result at cap and offers a cursor", async () => {
-    const fetchImpl = vi.fn(async () => page(5000, 1000, 5));
+describe("[fixture] search_units — one request, no loop", () => {
+  /**
+   * There used to be a pagination loop here, and three tests that "passed" against it. All three
+   * were unreachable in production: they called searchUnits() directly at cap=2500/20000, above
+   * the schema's max(1000), and the loop condition was `x < x` anyway. Green tests over dead code.
+   * These replace them with what actually happens.
+   */
+  it("the agent never loops — one request, size = cap", async () => {
+    const fetchImpl = vi.fn(async () => page(5000, 200, 25));
     const res = await searchUnits({ nace: "96.210", cap: 200 }, { fetchImpl });
     if (res.status !== "ok") throw new Error("expected ok");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(String((fetchImpl.mock.calls as unknown as [URL][])[0]![0])).toContain("size=200");
     expect(res.data.returned).toBe(200);
-    expect(res.data.total).toBe(5000);
-    expect(res.data.cursor).not.toBeNull();
   });
 
-  it("near the 10k deep-paging ceiling → narrow_selector hint, not a 400", async () => {
-    const fetchImpl = vi.fn(async () => page(50000, 1000, 50));
-    const res = await searchUnits({ nace: "86.210", cap: 20000 }, { fetchImpl });
+  it("truncation is stated, not implied by a cursor nothing can consume", async () => {
+    const fetchImpl = vi.fn(async () => page(5000, 200, 25));
+    const res = await searchUnits({ nace: "96.210", cap: 200 }, { fetchImpl });
+    if (res.status !== "ok") throw new Error("expected ok");
+    expect(res.data.truncated).toBe(true);
+    expect(res.data.total).toBe(5000);
+    expect(res.data).not.toHaveProperty("cursor");
+  });
+
+  it("more matches than cap → narrow_selector hint (reachable now it is not inside a dead loop)", async () => {
+    const fetchImpl = vi.fn(async () => page(5000, 200, 25));
+    const res = await searchUnits({ nace: "96.210", cap: 200 }, { fetchImpl });
     if (res.status !== "ok") throw new Error("expected ok");
     expect(res.data.hints.find((h) => h.kind === "narrow_selector")).toBeDefined();
+  });
+
+  it("past the deep-paging ceiling, the hint says paging is not an option", async () => {
+    const fetchImpl = vi.fn(async () => page(50000, 200, 250));
+    const res = await searchUnits({ nace: "86.210", cap: 200 }, { fetchImpl });
+    if (res.status !== "ok") throw new Error("expected ok");
+    expect(res.data.hints.find((h) => h.kind === "narrow_selector")!.message).toMatch(/hard-fails/);
+  });
+
+  it("a result set within cap → no truncation, no hint", async () => {
+    const fetchImpl = vi.fn(async () => page(12, 12, 1));
+    const res = await searchUnits({ nace: "96.210", cap: 200 }, { fetchImpl });
+    if (res.status !== "ok") throw new Error("expected ok");
+    expect(res.data.truncated).toBe(false);
+    expect(res.data.hints.find((h) => h.kind === "narrow_selector")).toBeUndefined();
   });
 });
 

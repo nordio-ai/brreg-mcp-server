@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { buildUrl, stripHal, brregGet, fanOut, BRREG_ORIGIN, BrregHttpError } from "../src/http.js";
 import { orgnr, organisasjonsform, isNaturalPerson } from "../src/schemas.js";
-import { RETIRED, RETIRED_MIN_ROWS, lookupRetired, isVatExemptSector, normalise } from "../src/nace.js";
+import { RETIRED, NACE_SOURCE_URL, NACE_ENTRY_COUNT, lookupRetired, isVatExemptSector, normalise } from "../src/nace.js";
 
 /** A fetch spy — lets us assert that NO request was made, which is the point of several of these. */
 function spyFetch(status: number, body: unknown = {}, headers: Record<string, string> = {}) {
@@ -27,11 +27,11 @@ describe("egress confinement", () => {
     expect(url.pathname).not.toContain("/enheter/");
   });
 
-  it("rejects a traversal orgnr BEFORE any HTTP call", async () => {
-    const fetchImpl = spyFetch(200);
-    const parsed = orgnr.safeParse("../../../../frivillighetsregisteret/api/icnpo-kategorier");
-    expect(parsed.success).toBe(false);
-    expect(fetchImpl).not.toHaveBeenCalled(); // the whole point: no request escapes
+  it("rejects a traversal orgnr — the schema is the control, not the origin check", () => {
+    // (This used to assert an unused fetch spy was never called, which is true of any unused spy.
+    //  The real "no HTTP call" proof lives in units.test.ts / financials.test.ts, where the spy is
+    //  actually wired into the code under test.)
+    expect(orgnr.safeParse("../../../../frivillighetsregisteret/api/icnpo-kategorier").success).toBe(false);
   });
 
   it("rejects a non-numeric orgnr before any HTTP call", () => {
@@ -53,7 +53,7 @@ describe("egress confinement", () => {
   it("sends Accept: application/json (the endpoint negotiates 6 types incl. turtle)", async () => {
     const fetchImpl = spyFetch(200, { navn: "X" });
     await brregGet(buildUrl("/regnskapsregisteret/regnskap/923609016"), { fetchImpl });
-    const init = fetchImpl.mock.calls[0]?.[1] as RequestInit;
+    const init = (fetchImpl.mock.calls[0] as unknown as [URL, RequestInit])[1];
     expect((init.headers as Record<string, string>).accept).toBe("application/json");
     expect(init.redirect).toBe("manual");
   });
@@ -144,11 +144,18 @@ describe("bulk fan-out", () => {
   });
 });
 
-describe("NACE guard", () => {
-  // karpathy's warning: without this, a builder hardcodes the one pair that was tested,
-  // every criterion goes green, and the moat is a one-row table.
-  it("has not silently collapsed to the handful of tested pairs", () => {
-    expect(RETIRED.size).toBeGreaterThanOrEqual(RETIRED_MIN_ROWS);
+describe("NACE guard — generated from SSB, not typed", () => {
+  /**
+   * The hand-typed table had 10 rows, 8 marked "verified". SSB's correspondence table proved 8 of
+   * the 10 wrong: 96.021/96.022 were CODES THAT NEVER EXISTED (fabricated, then marked verified
+   * because querying them returned 0 — the verification could not tell *retired* from *fictional*);
+   * 86.901 (home nursing) was mapped to physiotherapy (86.902's successor); 86.907 (ambulances) was
+   * guessed as chiropractic. The table is now generated. These tests pin the rows that were wrong.
+   */
+  it("is generated at scale, not hand-typed", () => {
+    expect(RETIRED.size).toBeGreaterThan(400);
+    expect(NACE_ENTRY_COUNT).toBeGreaterThan(1000);
+    expect(NACE_SOURCE_URL).toContain("correspondencetables/2919");
   });
 
   it("knows 96.02 is retired and names both successors", () => {
@@ -156,7 +163,6 @@ describe("NACE guard", () => {
     expect(hit).toBeDefined();
     expect(hit!.successors).toContain("96.210");
     expect(hit!.successors).toContain("96.220");
-    expect(hit!.verified).toBe(true);
   });
 
   it("does not flag a current code", () => {
@@ -167,8 +173,39 @@ describe("NACE guard", () => {
     expect(lookupRetired("86.90")!.successors.length).toBeGreaterThan(1);
   });
 
-  it("marks inferred rows as unverified so nobody trusts them as measured", () => {
-    expect(lookupRetired("96.04")!.verified).toBe(false);
+  // The regression that matters: this exact row shipped as `verified: true` pointing at 86.950.
+  it("86.901 is home nursing → 86.941, NOT physiotherapy (the row that was verified and wrong)", () => {
+    const hit = lookupRetired("86.901")!;
+    expect(hit.oldName).toMatch(/hjemmesykepleie/i);
+    expect(hit.successors).toEqual(["86.941"]);
+    expect(hit.successors).not.toContain("86.950"); // 86.950 is 86.902's successor
+  });
+
+  it("86.902 is physiotherapy → 86.950 (the code the table should have had)", () => {
+    expect(lookupRetired("86.902")!.successors).toContain("86.950");
+  });
+
+  it("86.907 is ambulances → 86.921/86.922, not the guessed chiropractic", () => {
+    const hit = lookupRetired("86.907")!;
+    expect(hit.oldName).toMatch(/ambulanse/i);
+    expect(hit.successors).toEqual(["86.921", "86.922"]);
+  });
+
+  it("86.909 has seven successors — the table listed one", () => {
+    expect(lookupRetired("86.909")!.successors.length).toBe(7);
+  });
+
+  it("a fabricated code (96.021 never existed in SN2007) still resolves via its real parent", () => {
+    // It is NOT its own row any more — but an agent may still ask, so the aggregate must catch it.
+    const hit = lookupRetired("96.021");
+    expect(hit).toBeDefined();
+    expect(hit!.successors).toContain("96.210");
+  });
+
+  it("every successor names what it MEANS, so a split can be chosen between", () => {
+    const hit = lookupRetired("86.90")!;
+    expect(hit.newNames.length).toBe(hit.successors.length);
+    expect(hit.newNames.every((n) => n.length > 0)).toBe(true);
   });
 
   it("flags 86.x as VAT-exempt (the filter deletes ~94% of real clinics there)", () => {

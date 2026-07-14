@@ -112,12 +112,19 @@ export interface FinancialsDeps {
 
 export async function fetchFinancials(
   ref: string,
+  statementType: "SELSKAP" | "KONSERN" | undefined,
   deps: FinancialsDeps = {},
 ): Promise<Result<Financials>> {
   const now = deps.now ?? new Date();
 
-  // Branch BEFORE the call: correctness (no misleading empty), cost (skips 74.5% of a real pool),
-  // and lawfulness (skips 74.5% of the natural persons) — one check, three wins.
+  // Branch BEFORE the call. Two wins and one honest cost:
+  //   ✓ correctness — `not_applicable` (a structural fact about the org form) is not `not_filed`
+  //     (a company that could file and didn't). Collapsing them loses real information.
+  //   ✓ lawfulness  — an ENK's data is a natural person's; we don't fetch what we can't use.
+  //   ✗ cost        — this does NOT save calls. lookupOrgForm IS an HTTP call (fetchUnit), so on a
+  //     74.5%-ENK pool it is N unit + 0.255N regnskap = ~1.255N: about 25% MORE than fanning out
+  //     blind. The spec claimed "skips 74.5% of calls" and the code inherited it; the test hid it
+  //     by stubbing lookupOrgForm to a constant. Correctness is worth the 25%. The claim wasn't true.
   const orgForm = await deps.lookupOrgForm?.(ref);
   if (isNaturalPerson(orgForm)) {
     return {
@@ -131,8 +138,12 @@ export async function fetchFinancials(
     };
   }
 
+  // regnskapstype is a REAL upstream param (SELSKAP | KONSERN). It was previously declared in the
+  // schema and silently dropped — an agent asking for KONSERN got whichever filing came back first,
+  // and consolidated vs company revenue differ by an order of magnitude. That is the same
+  // schema-lies defect this connector exists to call out in others.
   const res = await brregGet<RawRegnskap[]>(
-    buildUrl(`/regnskapsregisteret/regnskap/${seg(ref)}`),
+    buildUrl(`/regnskapsregisteret/regnskap/${seg(ref)}`, { regnskapstype: statementType }),
     { fetchImpl: deps.fetchImpl },
   );
 
@@ -155,7 +166,20 @@ export async function fetchFinancials(
     return { status: "ok", data: { status: "not_filed", reason: "No annual accounts on file." } };
   }
 
-  return mapRegnskap(filings[0]!, now);
+  // Belt and braces: honour the request even if upstream ignores the param. Taking filings[0]
+  // blind is how "asked for KONSERN, got SELSKAP" happens without an error.
+  const wanted = statementType ? filings.filter((f) => f.regnskapstype === statementType) : filings;
+  if (statementType && wanted.length === 0) {
+    return {
+      status: "ok",
+      data: {
+        status: "not_filed",
+        reason: `No ${statementType} accounts on file (the company may file only ${filings[0]?.regnskapstype ?? "the other type"}).`,
+      },
+    };
+  }
+
+  return mapRegnskap(wanted[0]!, now);
 }
 
 export function makeFinancialsTool(deps: FinancialsDeps = {}): ToolDef {
@@ -182,8 +206,12 @@ export function makeFinancialsTool(deps: FinancialsDeps = {}): ToolDef {
         .describe("SELSKAP (company, default) or KONSERN (consolidated group accounts)."),
     },
     annotations: readOnlyExternal,
-    async handler({ orgnrs }: { orgnrs: string[] }): Promise<{ content: { type: "text"; text: string }[] }> {
-      const items: ItemResult<Financials>[] = await fanOut(orgnrs, (ref) => fetchFinancials(ref, deps));
+    async handler(
+      { orgnrs, statement_type }: { orgnrs: string[]; statement_type?: "SELSKAP" | "KONSERN" },
+    ): Promise<{ content: { type: "text"; text: string }[] }> {
+      const items: ItemResult<Financials>[] = await fanOut(orgnrs, (ref) =>
+        fetchFinancials(ref, statement_type, deps),
+      );
       return { content: [{ type: "text", text: JSON.stringify({ items }, null, 2) }] };
     },
   };

@@ -60,10 +60,10 @@ describe("[fixture] erasure — no stale-serve path exists", () => {
     ];
     const fetchImpl = vi.fn(async () => (++calls === 1 ? json(200, filing) : json(410, {})));
 
-    const first = await fetchFinancials("999999991", { fetchImpl });
+    const first = await fetchFinancials("999999991", undefined, { fetchImpl });
     expect(first.status).toBe("ok");
 
-    const second = await fetchFinancials("999999991", { fetchImpl });
+    const second = await fetchFinancials("999999991", undefined, { fetchImpl });
     expect(second.status).toBe("error");
     if (second.status === "error") expect(second.reason).toBe("gone");
     expect(fetchImpl).toHaveBeenCalledTimes(2); // the "immutable" filing was NOT served from cache

@@ -51,8 +51,8 @@ describe("[fixture] --mock needs no network and still exercises every guard", ()
   });
 
   it("reproduces the 6.9bn trap and the USD assumption in one call", async () => {
-    const usd = await fetchFinancials("923609016", M);
-    const holding = await fetchFinancials("918035443", M);
+    const usd = await fetchFinancials("923609016", undefined, M);
+    const holding = await fetchFinancials("918035443", undefined, M);
     if (usd.status !== "ok" || holding.status !== "ok") throw new Error("expected ok");
 
     expect(usd.data.valuta).toBe("USD"); // not NOK
@@ -75,7 +75,7 @@ describe("[fixture] --mock needs no network and still exercises every guard", ()
   });
 
   it("ENK: not_applicable for financials, INNH for roles", async () => {
-    const fin = await fetchFinancials("999999901", { ...M, lookupOrgForm: async () => "ENK" });
+    const fin = await fetchFinancials("999999901", undefined, { ...M, lookupOrgForm: async () => "ENK" });
     if (fin.status !== "ok") throw new Error("expected ok");
     expect(fin.data.status).toBe("not_applicable");
 

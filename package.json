@@ -19,10 +19,11 @@
     "dev:mock": "tsx src/stdio.ts --mock",
     "inspect": "MOCK=1 npx @modelcontextprotocol/inspector tsx src/stdio.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.check.json",
     "build": "tsc -p tsconfig.json",
     "pack": "npx --yes @anthropic-ai/mcpb pack .",
-    "bundle": "npm run build && npm run pack"
+    "bundle": "npm run build && npm run pack",
+    "nace:build": "node bin/build-nace.mjs > src/nace-table.ts"
   },
   "dependencies": {
     "@nordio/server-kit": "0.8.0",

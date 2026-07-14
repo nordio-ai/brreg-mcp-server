@@ -110,10 +110,15 @@ describe("[fixture] contract — teaching layers", () => {
     for (const g of glossed) expect(text, `missing gloss: ${g}`).toContain(g);
   });
 
-  it("the reference renders every retired NACE row (not just the tested pair)", () => {
+  it("the reference cites the correspondence table, not SN2007 (which cannot document its own end)", () => {
     const text = typeof referenceResource.text === "function" ? referenceResource.text() : referenceResource.text;
-    for (const code of RETIRED.keys()) expect(text, `missing ${code}`).toContain(code);
-    expect(text).toMatch(/inferred — unconfirmed/); // honest about what isn't verified
+    expect(text).toContain("correspondencetables/2919");
+    expect(text).toMatch(/SN2025/);
+    // The rows that were wrong when hand-typed must render with their real meanings.
+    expect(text).toMatch(/86\.901/);
+    expect(text).toMatch(/Hjemmesykepleie/i);   // NOT "Fysioterapi"
+    expect(text).toMatch(/Ambulansetjenester/i); // NOT "Kiropraktor"
+    expect(RETIRED.size).toBeGreaterThan(400);
   });
 
   it("one prompt, and it teaches status-before-numbers", () => {
