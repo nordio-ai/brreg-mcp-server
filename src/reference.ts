@@ -59,13 +59,28 @@ is exactly backwards for \`driftsinntekter\`.
 const registerFacts = `
 ## What this register does and does not contain
 
-**Not present at all:** email addresses, phone numbers. brreg holds neither. Any contact data must
-come from elsewhere. \`hjemmeside\` (website) is present for roughly 9% of units.
+**Contact data: sparse, NOT absent.** brreg carries \`epostadresse\`, \`telefon\`, \`mobil\` and
+\`hjemmeside\`. Measured live on Oslo samples: **epost ~27%, mobil ~23%, telefon ~12%, hjemmeside
+~11%** — roughly **1 in 3** units has some contact route.
 
-**Present but usually empty:** \`antallAnsatte\`. About 96% of units have no headcount, and the
-minimum non-empty value observed across 19,173 units is **5** — no unit reports 1–4 employees.
-Therefore \`null\` means *unknown*, never *zero*, and any score weighted on headcount is really
-scoring *data availability*.
+> An earlier version of this manual denied these fields outright, citing a measurement of **0%**.
+> That 0% came from a lead-gen run's output CSVs, whose script never requested them. A script's field
+> selection was reported as a property of the register, and this server repeated it as fact while
+> *also* not returning the fields — so an agent asking for contact data was told, with a citation,
+> that there was none to be had. It cost a third of a reachable list.
+
+⚠️ For a sole proprietorship these are **a private individual's personal email and mobile**, at what
+is often a home address. Treat them as personal data, not B2B contact details.
+
+**\`antallAnsatte\`: withheld, not unknown.** The payload omits it for ~90% of units and **never shows
+a value below 5** — but brreg *holds* a count for essentially every unit and exposes it through the
+range filter. For Oslo hairdressers: **930** have 0 employees, **219 have 1–4** (never visible in the
+payload), **134** have ≥5 — summing to exactly the 1,283 total.
+
+> So the earlier conclusion — "headcount is unknown for 96%, therefore filtering on it filters on
+> data availability" — was half right. Filtering on the *payload field* does exactly that. Filtering
+> with \`employees_min\`/\`employees_max\` does not: it sees the hidden values. \`harRegistrertAntallAnsatte\`
+> tells you when a hidden count exists.
 
 **Org forms** (\`organisasjonsform\`), by share of a real Oslo discovered pool:
 | Code | Meaning | Share | Files accounts? |
@@ -149,15 +164,18 @@ at 50,000 NOK turnover) — **except** Norwegian health services are VAT-exempt 
 §3-2, https://lovdata.no/dokument/NL/lov/2009-06-19-58). Under NACE \`86.*\` the filter removes the
 very businesses you are looking for:
 
-| Sector | No filter | With MVA filter | |
-|---|---:|---:|---|
-| Helse (86.*) | 9,049 | **561** | real doctors deleted |
-| Psykolog (86.93*) | 2,044 | **107** | real psychologists deleted |
-| Skjønnhet (96.2*) | 1,362 | 1,362 | unaffected — filter is good here |
+| Sector (Oslo) | No filter | With MVA filter | Dropped | |
+|---|---:|---:|---:|---|
+| Helse \`86.210\` | 3,407 | **72** | **98%** | genuine clinics deleted |
+| Helse \`86.*\` | 11,832 | 783 | 93% | |
+| Skjønnhet \`96.2\` | 2,921 | 1,558 | **47%** | tolerable — but NOT free |
 
-*(Counts measured 2026-07 on one Oslo run — illustrative of the ratio, not current totals.)*
+*(Measured live 2026-07-15. An earlier version of this table claimed 96.2 was "1,362 → 1,362,
+unaffected" — that does not replicate: 47% of beauty/hairdressing units are dropped too. The filter
+is far safer in 96.x than 86.x; it is not lossless anywhere.)*
 
-**Use it for 96.x and 93.x. Never for 86.x.**
+**Use it for 96.x/93.x knowing it costs ~a third. Never use it for 86.x — health services are
+VAT-exempt by law, so the filter selects against the businesses you want.**
 `;
 };
 

@@ -19,11 +19,12 @@ That is the whole reason this exists.
 - **Annual accounts** (`regnskapsregisteret`) — no other public brreg MCP covers them.
 - **Retired-NACE guard** — a zero result arrives with a hint naming the current code and its live match count. The query is never silently rewritten.
 - **`filed_no_revenue_line`** — holding companies file `driftsinntekter: {}` (the key is *absent*, not zero, and not `""`). A `revenue >= X` filter silently deletes every one of them; this status is how you notice.
-- **`antallAnsatte: null`, never `0`** — ~96% of units report no headcount, and the minimum non-empty value is 5. Absent ≠ zero.
+- **`employees_min`/`employees_max`** — brreg hides every headcount below 5 from the payload, so filtering on the `antallAnsatte` field silently drops the small companies. The range filter sees them (219 Oslo hairdressers have 1–4 staff). `antallAnsatte: null` means *withheld*, not unknown.
 - **`INNH` resolution** — sole proprietorships have no board and no daglig leder. Looking only for `DAGL`/`LEDE` makes ~78% of Norwegian small business look contactless.
-- **VAT-sector warning** — `registrertIMvaregisteret` is a fine liveness proxy, except under NACE 86.\* (health is VAT-exempt) where it deletes ~94% of real clinics.
+- **VAT-sector warning** — `registrertIMvaregisteret` costs ~a third of results in 96.x/93.x and deletes **~98%** of genuine clinics under NACE 86.\* (health is VAT-exempt by law).
 - **`valuta` never assumed** — Equinor files in USD.
 - **Privacy by default** — no personal names unless you ask; birth dates never, even if you do.
+- **Contact data** — `epostadresse`, `mobil`, `telefon`, `hjemmeside`: sparse (~1 in 3 units) but real. For a sole proprietorship they are a private individual's personal details, and the tool says so.
 - **Bulk by array** — one call for many orgnrs, per-item partial success.
 - **No cache, no state, no telemetry** — one outbound host, `data.brreg.no`.
 
@@ -31,8 +32,8 @@ That is the whole reason this exists.
 
 | Tool | Does | Key params |
 |---|---|---|
-| `get_units` | Look up companies/branches by orgnr; resolves main-vs-branch for you and returns `unit_type` | `orgnrs` |
-| `search_units` | Search by industry, municipality, name, org form or VAT; internally paginated, carries the guards | `nace`, `kommune`, `navn`, `org_form`, `registrertIMvaregisteret`, `strict_location`, `cap` |
+| `get_units` | Look up companies/branches by orgnr; resolves main-vs-branch for you and returns `unit_type`, contact fields, and `is_natural_person` | `orgnrs` |
+| `search_units` | Search by industry, municipality, name, org form, VAT or **employee range**; carries the guards | `nace`, `kommune`, `navn`, `org_form`, `registrertIMvaregisteret`, `employees_min`, `employees_max`, `strict_location`, `cap` |
 | `get_roles` | Board, management and sole-proprietor owner. Structure only by default | `orgnrs`, `include_persons` |
 | `get_financials` | Annual accounts, as a discriminated union you must read before the numbers | `orgnrs`, `statement_type` |
 
@@ -74,7 +75,7 @@ Download the `.mcpb` from [Releases](https://github.com/nordio-ai/brreg-mcp-serv
 | `total: 0` | **Maybe not "none exist."** Check `hints` — the NACE code may be retired. |
 | `driftsinntekter: null` + `filed_no_revenue_line` | Accounts filed, no operating revenue line. A holding company. **Not** zero revenue. |
 | `status: not_applicable` | An ENK. Sole proprietorships never file. **Not** a red flag. |
-| `antallAnsatte: null` | The register has no headcount (~96% of units). **Not** zero employees. |
+| `antallAnsatte: null` | **Withheld, not unknown** — brreg never shows a value below 5. Use `employees_min`/`employees_max` to filter; `antallAnsatte_reported` says whether a hidden count exists. |
 | `valuta: "USD"` | It happens. Never compare revenue across companies without reading it. |
 | `deleted` vs `gone` vs `not_found` | Dissolved · removed on legal grounds · never existed. Three different facts. |
 

@@ -39,9 +39,10 @@ import { RETIRED, CURRENT } from "./nace-table.js";
  * businesses you were looking for.
  *
  * Measured on a real run:
- *   Helse    9,049 → 561   (94% of real clinics deleted)
- *   Psykolog 2,044 → 107
- *   Skjønnhet 1,362 → 1,362 (unaffected)
+ * Measured live in Oslo (2026-07-15):
+ *   86.210 Helse       3,407 → 72     (98% of genuine clinics deleted)
+ *   86.*   Helse      11,832 → 783    (93%)
+ *   96.2   Skjønnhet   2,921 → 1,558  (47% — safer, but NOT "unaffected" as an earlier note claimed)
  */
 export const VAT_EXEMPT_PREFIXES = ["86"] as const;
 

@@ -68,7 +68,8 @@ describe("[fixture] schema → BEHAVIOUR parity (not schema → docs)", () => {
   it("tripwire: the param list is pinned, so a new param cannot be added without a wiring test", () => {
     expect(Object.keys(makeFinancialsTool().inputSchema ?? {}).sort()).toEqual(["orgnrs", "statement_type"]);
     expect(Object.keys(makeSearchTool().inputSchema ?? {}).sort()).toEqual(
-      ["cap", "kommune", "nace", "navn", "org_form", "registrertIMvaregisteret", "strict_location"],
+      ["cap", "employees_max", "employees_min", "kommune", "nace", "navn", "org_form",
+       "registrertIMvaregisteret", "strict_location"],
     );
   });
 
@@ -84,12 +85,18 @@ describe("[fixture] schema → BEHAVIOUR parity (not schema → docs)", () => {
     });
     const { searchUnits } = await import("../src/tools/search.js");
     await searchUnits(
-      { nace: "96.210", kommune: "0301", navn: "TEST", org_form: "AS", registrertIMvaregisteret: true, cap: 5 },
+      {
+        nace: "96.210", kommune: "0301", navn: "TEST", org_form: "AS",
+        registrertIMvaregisteret: true, employees_min: 1, employees_max: 4, cap: 5,
+      },
       { fetchImpl },
     );
     for (const expected of [
       "naeringskode=96.210", "kommunenummer=0301", "navn=TEST",
       "organisasjonsform=AS", "registrertIMvaregisteret=true", "size=5",
+      // Added after the eval proved the payload hides every headcount below 5 and this range
+      // filter is the only way to see them.
+      "fraAntallAnsatte=1", "tilAntallAnsatte=4",
     ]) {
       expect(urls[0], `param missing from the wire: ${expected}`).toContain(expected);
     }

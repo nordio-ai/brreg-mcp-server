@@ -40,6 +40,19 @@ export interface SearchParams {
   navn?: string;
   org_form?: string;
   registrertIMvaregisteret?: boolean;
+  /**
+   * Headcount range — the ONLY way to filter on employees, and the reason this exists.
+   *
+   * brreg withholds small headcounts from the payload (no value below 5 is ever shown), so an
+   * earlier version of this server told agents the count was "unknown for 96% of units" and that
+   * filtering on it filtered on data availability. Half true: filtering on the *field* does. The
+   * *range filter* sees the hidden values — for Oslo hairdressers it finds 219 units with 1–4
+   * employees that the payload never reveals (930 zero + 219 (1–4) + 134 (≥5) = the 1,283 total).
+   * Without these params the tool cannot answer "who has staff?", which is a first-order lead-gen
+   * question, and it would confidently tell you the register can't either.
+   */
+  employees_min?: number;
+  employees_max?: number;
   cap?: number;
   strict_location?: boolean;
 }
@@ -60,6 +73,8 @@ function toQuery(p: SearchParams, page: number, size: number): Record<string, un
     navn: p.navn,
     organisasjonsform: p.org_form,
     registrertIMvaregisteret: p.registrertIMvaregisteret,
+    fraAntallAnsatte: p.employees_min,
+    tilAntallAnsatte: p.employees_max,
     size,
     page,
   };
@@ -217,6 +232,9 @@ export function makeSearchTool(deps: SearchDeps = {}): ToolDef {
       "current code. Never conclude 'no such businesses exist' from a zero without checking hints.\n\n" +
       "`registrertIMvaregisteret: true` is a good proxy for a trading business — EXCEPT in health " +
       "(NACE 86.*), which is VAT-exempt, where it deletes ~94% of genuine clinics. You will be warned.\n\n" +
+      "To filter by staff size use `employees_min`/`employees_max`, NOT the antallAnsatte field in the " +
+      "results — brreg hides every headcount below 5 from the payload but the range filter can still " +
+      "see them.\n\n" +
       "Scope: interactive discovery and targeted enrichment (tens to a couple of hundred results). For " +
       "whole-register extraction, use the API directly — that is not what this tool is for.",
     inputSchema: {
@@ -227,7 +245,21 @@ export function makeSearchTool(deps: SearchDeps = {}): ToolDef {
       registrertIMvaregisteret: z
         .boolean()
         .optional()
-        .describe("VAT-registered. A liveness proxy — but harmful in NACE 86.* (health is VAT-exempt)."),
+        .describe(
+          "VAT-registered. A liveness proxy — costs ~a third of results in 96.x/93.x, and is actively " +
+            "harmful in NACE 86.* (health is VAT-exempt by law, so it deletes ~98% of genuine clinics).",
+        ),
+      employees_min: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe(
+          "Minimum employees. USE THIS to filter on headcount — do NOT filter on the antallAnsatte " +
+            "field, which is null for ~90% of units because brreg withholds values below 5. This range " +
+            "filter sees the hidden counts (e.g. 219 Oslo hairdressers have 1-4 employees).",
+        ),
+      employees_max: z.number().int().min(0).optional().describe("Maximum employees."),
       strict_location: z
         .boolean()
         .default(false)

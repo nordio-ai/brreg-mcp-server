@@ -40,9 +40,18 @@ export interface Unit {
   /** null when brreg never published a headcount — NEVER 0. See antallAnsatte_reported. */
   antallAnsatte?: number | null;
   /**
-   * 96% of the register never reports a headcount, and the minimum non-empty value is 5 —
-   * no company reports 1–4. `0` here would assert "no employees" about a company that simply
-   * never told anyone.
+   * Whether the REGISTER holds a headcount — brreg's own `harRegistrertAntallAnsatte`, not an
+   * inference from the field being absent.
+   *
+   * The distinction matters and an earlier version got it wrong. `antallAnsatte` is absent from the
+   * payload for ~90% of units, and the payload never shows a value below 5 — from which this server
+   * concluded "the count is unknown for 96% of units". **It is not unknown. It is withheld.**
+   * brreg exposes it through the range filter instead: for Oslo hairdressers, 930 have 0 employees,
+   * **219 have 1–4** (never shown in the payload), and 134 have ≥5 — summing to exactly the 1,283
+   * total. The register knows every count.
+   *
+   * So `antallAnsatte: null` + `antallAnsatte_reported: true` means "brreg has a number and is not
+   * showing it here — use search_units with employees_min/employees_max to filter on it".
    */
   antallAnsatte_reported: boolean;
   naeringskode?: string;
@@ -52,6 +61,20 @@ export interface Unit {
   registrertIMvaregisteret?: boolean;
   konkurs?: boolean;
   underAvvikling?: boolean;
+  /**
+   * CONTACT DATA. brreg holds it, and an earlier version of this server told agents it did not.
+   *
+   * The claim "brreg holds no email and no phone — those fields do not exist" was in this tool's
+   * description, in `instructions`, in `brreg://reference` and in the README. It came from an
+   * analysis of a lead-gen run's output CSVs, which showed 0% — because that run's script never
+   * REQUESTED these fields. A script's field selection was encoded as a fact about the register.
+   * Measured live on 300 Oslo units: epost 26.7%, mobil 22.7%, telefon 12.3%, hjemmeside 11.0%.
+   * mapUnit did not even map them, so the most valuable fields for the actual use case were
+   * silently dropped while the agent was told they did not exist.
+   */
+  epostadresse?: string;
+  telefon?: string;
+  mobil?: string;
   hjemmeside?: string;
   /** Present only for a dissolved unit. Its presence IS the deleted signal. */
   slettedato?: string;
@@ -69,14 +92,17 @@ interface RawUnit {
   registrertIMvaregisteret?: boolean;
   konkurs?: boolean;
   underAvvikling?: boolean;
+  epostadresse?: string;
+  telefon?: string;
+  mobil?: string;
   hjemmeside?: string;
+  harRegistrertAntallAnsatte?: boolean;
   slettedato?: string;
   overordnetEnhet?: string;
 }
 
 export function mapUnit(raw: RawUnit, unitType: UnitType): Unit {
   const addr = raw.forretningsadresse ?? raw.beliggenhetsadresse;
-  const reported = typeof raw.antallAnsatte === "number";
 
   return {
     organisasjonsnummer: raw.organisasjonsnummer ?? "",
@@ -85,8 +111,10 @@ export function mapUnit(raw: RawUnit, unitType: UnitType): Unit {
     unit_type: unitType,
     is_natural_person: isNaturalPerson(raw.organisasjonsform?.kode),
     // absent → null, never 0. Same rule as sumDriftsinntekter; same reason.
-    antallAnsatte: reported ? raw.antallAnsatte! : null,
-    antallAnsatte_reported: reported,
+    antallAnsatte: typeof raw.antallAnsatte === "number" ? raw.antallAnsatte : null,
+    // brreg's own flag — NOT `antallAnsatte !== undefined`. The register can hold a count it does
+    // not put in the payload (every 1–4 value is like this).
+    antallAnsatte_reported: raw.harRegistrertAntallAnsatte ?? typeof raw.antallAnsatte === "number",
     naeringskode: raw.naeringskode1?.kode,
     naeringskode_beskrivelse: raw.naeringskode1?.beskrivelse,
     kommunenummer: addr?.kommunenummer,
@@ -94,6 +122,9 @@ export function mapUnit(raw: RawUnit, unitType: UnitType): Unit {
     registrertIMvaregisteret: raw.registrertIMvaregisteret,
     konkurs: raw.konkurs,
     underAvvikling: raw.underAvvikling,
+    epostadresse: raw.epostadresse,
+    telefon: raw.telefon,
+    mobil: raw.mobil,
     hjemmeside: raw.hjemmeside,
     slettedato: raw.slettedato,
     overordnetEnhet: raw.overordnetEnhet,
@@ -138,13 +169,16 @@ export function makeUnitsTool(deps: UnitsDeps = {}): ToolDef {
       "You do NOT need to know whether an orgnr is a main unit or a branch: the server resolves it and " +
       "tells you in `unit_type`.\n\n" +
       "Read these two fields carefully:\n" +
-      "  • `antallAnsatte` is null when the register has no headcount — which is ~96% of the time. " +
-      "null means UNKNOWN, not zero. `antallAnsatte_reported` says which it is. Never filter on " +
-      "employee count without accounting for that.\n" +
+      "  • `antallAnsatte` is null for ~90% of units — but that does NOT mean unknown. brreg holds a " +
+      "count for essentially every unit and simply withholds small ones from this payload: no value " +
+      "below 5 is ever shown. `antallAnsatte_reported: true` with a null value means the register HAS " +
+      "a number it is not showing you. To filter on headcount, use search_units employees_min/" +
+      "employees_max — the range filter sees the hidden values.\n" +
       "  • A dissolved company returns an error with reason `deleted` plus its slettedato; one removed " +
       "for legal reasons returns reason `gone`. Neither is the same as `not_found`.\n\n" +
-      "brreg supplies no email and no phone — those fields do not exist. `hjemmeside` is present ~9% " +
-      "of the time.\n\n" +
+      "brreg DOES carry contact data, for a minority of units: `epostadresse` (~27%), `mobil` (~23%), " +
+      "`telefon` (~12%), `hjemmeside` (~11%) on an Oslo sample. Coverage is thinner for sole " +
+      "proprietorships.\n\n" +
       "`is_natural_person: true` means the unit is a sole proprietorship (ENK) and its NAME IS A " +
       "PERSON'S NAME — Norwegian law requires it to contain the owner's surname, and the address is " +
       "often their home. ~74% of the register. Treat those records as personal data.",
