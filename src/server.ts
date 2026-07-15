@@ -1,4 +1,4 @@
-import { createMcpServer } from "@nordio/server-kit";
+import { createMcpServer, type ToolDef } from "@nordio/server-kit";
 import { instructions } from "./instructions.js";
 import { referenceResource, dueDiligencePrompt } from "./reference.js";
 import { makeUnitsTool, fetchUnit } from "./tools/units.js";
@@ -26,6 +26,29 @@ export function makeLookupOrgForm(fetchImpl?: typeof fetch) {
   };
 }
 
+/**
+ * The four tools, built once — the seam every surface shares (§7a).
+ *
+ * EXPORTED so `src/cli.ts` dispatches THESE ToolDefs, not a parallel list. The CLI and the MCP then
+ * run the same handlers, the same zod schemas and the same hint text by construction, rather than by
+ * two authors remembering to keep them in step. If a verb exists in one surface and not the other,
+ * that is a bug in the dispatcher, never a second implementation to write.
+ *
+ * (`eval/brreg-cli.mjs` deliberately does NOT use this: it calls the inner functions directly and is
+ * the eval's arm-C transport, frozen as part of the experiment's record. Do not merge the two.)
+ */
+export function buildTools(opts: { mock?: boolean } = {}): ToolDef[] {
+  // --mock swaps the SOCKET, not the code path: every tool, guard and mapper runs unchanged.
+  const fetchImpl = opts.mock ? mockFetch : undefined;
+  const lookupOrgForm = makeLookupOrgForm(fetchImpl);
+  return [
+    makeUnitsTool({ fetchImpl }),
+    makeSearchTool({ fetchImpl }),
+    makeRolesTool({ fetchImpl }),
+    makeFinancialsTool({ fetchImpl, lookupOrgForm }),
+  ];
+}
+
 export function buildServer(opts: { mock?: boolean } = {}) {
   // --mock swaps the SOCKET, not the code path: every tool, guard and mapper runs unchanged.
   const fetchImpl = opts.mock ? mockFetch : undefined;
@@ -47,18 +70,11 @@ export function buildServer(opts: { mock?: boolean } = {}) {
   // It bought nothing anyway: fanOut already dedupes refs within a call (http.ts, `[...new Set]`),
   // which was the stated motivation. The only thing it added was reuse ACROSS calls — precisely the
   // thing this connector promises not to do.
-  const lookupOrgForm = makeLookupOrgForm(fetchImpl);
-
   return createMcpServer({
     name: "brreg-mcp",
     version: "0.1.0",
     instructions,
-    tools: [
-      makeUnitsTool({ fetchImpl }),
-      makeSearchTool({ fetchImpl }),
-      makeRolesTool({ fetchImpl }),
-      makeFinancialsTool({ fetchImpl, lookupOrgForm }),
-    ],
+    tools: buildTools(opts),
     resources: [referenceResource],
     prompts: [dueDiligencePrompt],
     mock: opts.mock ?? false,

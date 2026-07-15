@@ -1,0 +1,13 @@
+version: 2
+# Deps here are pinned EXACTLY (server-kit 0.8.0, zod 3.25.76) — which the scorecard graded ✅
+# "pinned + lockfile, 0 vulns". Exact pins WITHOUT Dependabot are frozen forever, so that ✅ decays
+# silently with nothing to say so. Pinning and Dependabot are one control; this is its other half.
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

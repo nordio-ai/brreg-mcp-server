@@ -3,7 +3,23 @@
 Scored against `mcp-factory/checklists/factory-scorecard.md`.
 Shape: Pattern C, stdio, `read-only`. `[remote]`/`[write]` lines are genuinely N/A — no auth surface, no write surface, no secrets.
 
-## VERDICT: **Fix first** — no ❌ in Blockers; ⚠️ on three unproven claims.
+## VERDICT: **Fix first** — one ❌ (no git remote); no ❌ in Blockers.
+
+> **§8 Distribution added 2026-07-15 — and it found six ❌ this file had scored ✅ or not scored at all.**
+> The factory scorecard had **zero** lines mentioning `npm`, `release.yml` or `mcp-updater`, so an
+> *adversarial* `/mcp-factory:score` run — explicitly told to falsify every ✅ below — reported no
+> distribution gaps. It could not: **a gate can only fail what it lists.** What was actually missing:
+> npm publish, `release.yml`, `dependabot.yml`, a CLI, a skill, and a `.mcpb` gitignored with no Release
+> to live in. Five are now fixed; one remains:
+>
+> **❌ No git remote.** No remote → no Actions → **CI has never run** (so "cross-platform proven" is an
+> assumption, not a result) → no Release → the `.mcpb` reaches nobody. This is a decision, not a defect:
+> the remote was deliberately removed after the spec leaked. The spec now lives in the KB and `SPEC.md`
+> is gitignored, so the original reason is resolved — but restoring a remote is Frank's call.
+>
+> Also fixed en route: `readme-parity.sh` was **silently blind** on this repo (it parsed
+> `tests/readme.test.ts` as the README *and* missed tools split into `src/tools/`; the two bugs
+> cancelled into "N/A — nothing to reconcile"). It now reports ✅ 4.
 
 **Read the history of this file before trusting it.** Two earlier versions, written by the same
 author as the code, both claimed **Ship/Adopt — no ❌ anywhere**. Both were wrong:
@@ -87,7 +103,35 @@ accordingly**, and re-run `/mcp-factory:score` rather than believing it.
 | ✅ | Docs match code | README rewritten; CI-checked tool-table parity. It had carried the corrected `""` claim — a reader implementing that literal writes `if (rev === "")`, which never fires against the real API. |
 | ✅ | README contract | Value prop → Features → Tools (parity-checked) → Quick Start → Desktop → paths → Updating → CHANGELOG. |
 | N/A | `.env.example` | No env vars. |
-| ⚠️ | Setup friction | No `.mcpb` published, so a competitor's `npx` is still the shorter path today. |
+| ⚠️ | Setup friction | No `.mcpb` published (no remote → no Release), so a competitor's `npx` is still the shorter path today. |
+
+## 7. CLI supplement (§7a — additive for Pattern C, NOT N/A)
+
+*Was skipped entirely: the scorecard's §7 header read "Pattern B tools — replaces sections 3–4 for CLIs",
+so declaring "Pattern C" marked every line here **N/A by construction**. A shape-conditional check cannot
+detect a missing shape.*
+
+| | Line | Notes |
+|---|---|---|
+| ✅ | Output contract | JSON-only stdout + `elapsed_sec`; diagnostics stderr; usage errors exit 2, upstream failures exit 1. |
+| ✅ | `doctor` + `self-test` | `self-test` runs 4 cases offline through the real handlers. Its non-vacuity is **tested**: `tests/cli.test.ts` empties the retired-NACE table and asserts it goes red. |
+| ✅ | Epistemic status | The financials union (`filed` / `filed_no_revenue_line` / `not_filed` / `not_applicable`) *is* the epistemic status. |
+| N/A | Destructive verbs | Read-only; brreg has no write API. |
+| N/A | Batch ledger | No state, deliberately (410 = purge). Bulk is `--orgnrs a,b`. |
+| ✅ | SKILL.md contract | `skills/brreg/SKILL.md` — "parse the JSON", batch guardrails, uncertainty. **Written fresh**, sharing no provenance with `eval/SKILL.md` (which is arm B's control, headed *"written to WIN"*, and must never ship as the skill). |
+| ✅ | README↔verb parity | `readme-parity.sh` → ✅ 4 (after fixing the gate that couldn't see this repo). |
+
+## 8. Distribution & packaging (§7a, §13) — applies to every shape
+
+| | Line | Notes |
+|---|---|---|
+| ❌ | **`.mcpb` via a GitHub Release** | `release.yml` now packs + attaches, and `*.mcpb` stays gitignored — but **no remote, so it has never run.** The 3.7 MB bundle exists on one laptop. |
+| ⚠️ | **Published to npm, scoped** | `@nordio/brreg-mcp-server` is free and now publishable (`bin` for server + CLI, `files` correct). Not yet published — the release workflow does it, and it can't run. *(Unscoped `brreg-mcp-server` is taken on npm at v1.0.0 — one of the servers scored 4/10.)* |
+| ✅ | **Every path in `files` exists** | **Was ❌ while unscored.** `files: ["dist","server.json"]` — `server.json` never existed, anywhere. npm doesn't error on that; it ships without it, silently. Now `["dist"]`, and the lint checks every path. |
+| ✅ | `dependabot.yml` present | **Was ❌.** Deps are pinned *exactly*, which §1 graded ✅ "0 vulns" — but exact pins with no Dependabot are frozen forever, so that ✅ was decaying with nothing to say so. |
+| ✅ | `.mcpb` packs prod-only | `bin/bundle.mjs` stages `--omit=dev` and refuses to pack if dev tooling or a platform-specific binary is present. |
+| ✅ | **CLI surface** (§7a) | **Was ❌.** `src/cli.ts` dispatches `buildTools()` — the identical array `buildServer()` registers, asserted by a test. |
+| ✅ | **Skill surface** (§7a) | **Was ❌.** `skills/brreg/SKILL.md`. |
 
 ---
 

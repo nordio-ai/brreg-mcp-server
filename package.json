@@ -5,11 +5,11 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "brreg-mcp": "dist/stdio.js"
+    "brreg-mcp": "dist/stdio.js",
+    "brreg": "dist/cli.js"
   },
   "files": [
-    "dist",
-    "server.json"
+    "dist"
   ],
   "engines": {
     "node": ">=20"
@@ -17,6 +17,7 @@
   "scripts": {
     "dev": "tsx src/stdio.ts",
     "dev:mock": "tsx src/stdio.ts --mock",
+    "cli": "tsx src/cli.ts",
     "inspect": "MOCK=1 npx @modelcontextprotocol/inspector tsx src/stdio.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.check.json",

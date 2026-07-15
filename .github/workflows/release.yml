@@ -1,0 +1,50 @@
+name: Release
+# §7a: the `.mcpb` reaches users via a GitHub RELEASE — never committed (`*.mcpb` is gitignored).
+# Tag `vX.Y.Z` → build → pack (prod-only staging) → attach to the Release → publish to npm.
+#
+# ⚠️ THIS WORKFLOW HAS NEVER RUN. This repo has no git remote (a deliberate earlier decision), so
+# GitHub Actions has never executed here — neither this nor ci.yml. Until a remote exists, the .mcpb
+# reaches nobody and "cross-platform proven" is an assumption, not a result. See SCORECARD.md.
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+  id-token: write        # npm provenance
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Guard — tag matches manifest.json AND package.json
+        # Two manifests carry a version and nothing else compares them, so a release can otherwise
+        # ship a .mcpb and an npm package claiming different versions.
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          MAN="$(node -p "require('./manifest.json').version")"
+          PKG="$(node -p "require('./package.json').version")"
+          [ "$VER" = "$MAN" ] || { echo "::error::tag $VER != manifest.json $MAN"; exit 1; }
+          [ "$VER" = "$PKG" ] || { echo "::error::tag $VER != package.json $PKG"; exit 1; }
+      - run: npm ci
+      - name: Build + pack the .mcpb (production-only staging)
+        # bin/bundle.mjs, not `mcpb pack .`: the naive form shipped 27 MB / 142 packages including
+        # vitest and an 8.3 MB macOS-only binary inside a 3-platform bundle, while the audit that
+        # read "0 vulns" was measuring a different tree. bundle.mjs refuses to pack either.
+        run: npm run bundle
+      - name: GitHub Release + attach .mcpb
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          NAME="$(node -p "require('./package.json').name.split('/').pop()")"
+          awk "/^## \[$VER\]/{f=1;next} /^## \[/{f=0} f" CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md "$NAME.mcpb"
+      - name: Publish to npm (scoped, public)
+        # The unscoped name `brreg-mcp-server` is already taken on npm (v1.0.0, someone else's).
+        # Only @nordio/ is ours.
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

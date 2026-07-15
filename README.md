@@ -46,9 +46,29 @@ npm run dev:mock          # real offline mode — no network, every guard live
 
 `--mock` is not a stub: it swaps the socket, not the code path, and its dataset **is** the register's traps (a USD filer, a holding company with no revenue line, an ENK, a dissolved unit, a 410, a retired NACE code). Everything on this page reproduces offline.
 
+## ⌨️ CLI
+
+The same handlers the MCP registers, over argv — `src/cli.ts` dispatches the identical `buildTools()` array, so a finding from one surface holds for the other.
+
+```bash
+brreg get_units --orgnrs 923609016
+brreg search_units --nace 96.02 --kommune 0301     # watch it catch the retired code
+brreg get_financials --orgnrs 918035443
+brreg reference                                     # field glossary + statutory sources
+brreg self-test --mock                              # proves the install works offline
+```
+
+stdout is one JSON object (with `elapsed_sec`); diagnostics on stderr; usage errors exit **2**, upstream failures exit **1**. `--orgnrs a --orgnrs b` and `--orgnrs a,b` both work — bulk is the intended shape.
+
+## 📚 Skill
+
+`skills/brreg/SKILL.md` carries the domain knowledge an agent can't infer from a successful response — which silences are meaningful and which plausible number is wrong. The tools' guards always fire; the skill is what lets an agent go past the four tools when the question needs it.
+
 ## 🖥️ Claude Desktop
 
-Download the `.mcpb` from [Releases](https://github.com/nordio-ai/brreg-mcp-server/releases) and double-click it. No terminal, no Node install, no API key — brreg needs no credentials.
+Download the `.mcpb` from Releases and double-click it. No terminal, no Node install, no API key — brreg needs no credentials.
+
+> ⚠️ **There are no Releases yet — this repo has no git remote**, by an explicit earlier decision. So GitHub Actions has never run (neither CI nor `release.yml`), the `.mcpb` is correctly gitignored but reaches nobody, and "cross-platform proven" is an assumption rather than a result. Build one locally with `npm run bundle`. See [SCORECARD.md](SCORECARD.md).
 
 <details>
 <summary>Claude Code / Cursor / any stdio client</summary>
