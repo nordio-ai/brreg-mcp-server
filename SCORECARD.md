@@ -34,10 +34,18 @@ Shape: Pattern C, stdio, `read-only`. `[remote]`/`[write]` lines are genuinely N
 > `[0.1.0]`), and the README's stdio instructions pointed at `./dist/stdio.js` — gitignored, so absent
 > from any fresh clone, and relative to the client's cwd.
 >
-> **❌ Not published to npm.** `release.yml`'s publish step needs an `NPM_TOKEN` secret, which is not
-> set — so `v0.1.0` was cut directly (`gh release create`) with `release.yml` temporarily disabled,
-> to avoid a red first release. `npx -y @nordio/brreg-mcp-server` does not work until that token
-> exists. Setting it is Frank's call.
+> **✅ Published to npm — `@nordio/brreg-mcp-server`, with sigstore provenance.** `release.yml` runs
+> end-to-end on a `v*` tag: guard, `npm ci`, pack, Release, publish. Two false starts worth keeping,
+> because both look like success from the inside:
+>
+> - The first `NPM_TOKEN` was a **Publish** token, which enforces 2FA — CI has no authenticator, so
+>   it failed `EOTP`. No amount of retrying fixes that; it needs an **Automation** token.
+> - `v0.1.0` was cut by hand (`gh release create`, `release.yml` temporarily disabled) to avoid a red
+>   first release while the token was wrong. It is the only release not built by CI, and the only one
+>   published without provenance.
+>
+> Verified the way it is actually consumed: an anonymous `curl` of the Release asset, and an MCP
+> `initialize` handshake over `npx -y @nordio/brreg-mcp-server` from outside the repo.
 >
 > **Three more defects surfaced only by publishing, after CI was green.** CI proves the code builds
 > and passes; it does not prove the artifact installs. Each of these was invisible to a green build:
