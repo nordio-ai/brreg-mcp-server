@@ -6,39 +6,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · [SemVer](htt
 ## [0.1.3] - 2026-07-20
 
 ### Fixed
-- **The MCP handshake announced the wrong version.** `serverInfo.version` was a literal `"0.1.0"`
-  in `src/server.ts`, so `0.1.2` published to npm and told every client it was `0.1.0`. A version
-  lived in four places — `package.json`, `manifest.json`, the git tag, and that literal — while
-  `release.yml`'s guard compares only the first three. The fourth was the one nobody compared.
-
-  A client reads `serverInfo.version` to decide whether it is talking to a build containing a given
-  fix; a version that under-reports is a confident wrong answer, which is the failure mode this
-  connector exists to refuse. Now read from `package.json` at runtime, verified working from `src/`,
-  from the packed npm tarball, and from inside the `.mcpb`. `tests/version.test.ts` asserts all
-  three sources agree, so the guard can no longer be outrun.
+- The server now reports its real version in the MCP handshake. It previously always answered
+  `0.1.0`, so a client could not tell which build it was talking to.
 
 ## [0.1.2] - 2026-07-20
 
 ### Fixed
-- **npm publish with provenance failed: `E422 ... "repository.url" is ""`.** `--provenance`
-  cryptographically binds the tarball to the repo that built it, so npm rejects a package whose
-  `package.json` does not declare a matching `repository`. There was none. Added `repository`,
-  `homepage` and `bugs`. Only a real provenance publish from CI could surface this — a local
-  `npm publish` (no OIDC, no provenance) succeeds without it.
+- `npx -y @nordio/brreg-mcp-server` now works. Earlier versions shipped no executable matching the
+  package name, so the standard MCP client config —
+  `{"command": "npx", "args": ["-y", "@nordio/brreg-mcp-server"]}` — failed with
+  *"could not determine executable to run"*. The `.mcpb` and `brreg` CLI were unaffected.
+- First version published to npm with [sigstore provenance](https://docs.npmjs.com/generating-provenance-statements).
 
-> `0.1.1` was tagged and released on GitHub with a `.mcpb`, but never reached npm: the publish step
-> failed on the above. `0.1.2` is the first version on npm carrying the `npx` bin fix.
-
-## [0.1.1] - 2026-07-20
-
-### Fixed
-- **`npx -y @nordio/brreg-mcp-server` failed with "could not determine executable to run."**
-  The package shipped two bins (`brreg-mcp`, `brreg`) and npm resolves a bare `npx <pkg>` by
-  looking for a bin matching the *package* name — neither did. That bare form is exactly what
-  MCP client configs use (`"command": "npx", "args": ["-y", "@nordio/brreg-mcp-server"]`), so
-  the npm install path was broken for its primary audience while the `.mcpb` and a direct
-  `node dist/cli.js` both worked. Added a `brreg-mcp-server` bin pointing at the stdio server;
-  the existing two are unchanged.
+> `0.1.1` exists as a git tag and a GitHub release but was never published to npm. Use `0.1.2` or later.
 
 ## [0.1.0] - 2026-07-20
 

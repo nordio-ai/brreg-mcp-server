@@ -39,6 +39,30 @@ Shape: Pattern C, stdio, `read-only`. `[remote]`/`[write]` lines are genuinely N
 > to avoid a red first release. `npx -y @nordio/brreg-mcp-server` does not work until that token
 > exists. Setting it is Frank's call.
 >
+> **Three more defects surfaced only by publishing, after CI was green.** CI proves the code builds
+> and passes; it does not prove the artifact installs. Each of these was invisible to a green build:
+>
+> 1. **`npx -y @nordio/brreg-mcp-server` → "could not determine executable to run."** npm resolves a
+>    bare `npx <pkg>` to a bin matching the *package* name; the package shipped `brreg-mcp` and
+>    `brreg`, neither of which does. That bare form is what every MCP client config uses, so the npm
+>    path was broken for its primary audience — while the `.mcpb` and a direct `node dist/cli.js`
+>    both worked, which is exactly why nothing caught it. Fixed in 0.1.2.
+> 2. **Provenance publish rejected: `E422 ... "repository.url" is ""`.** `--provenance` binds the
+>    tarball to the repo that built it, so npm requires a matching `repository` field. There was
+>    none. A local `npm publish` has no OIDC and no provenance, so it succeeds without it — 0.1.0
+>    went out by hand fine, and only CI could expose this. Fixed in 0.1.2.
+> 3. **`serverInfo.version` was a literal `"0.1.0"` in `src/server.ts`.** 0.1.2 published to npm
+>    announcing itself as 0.1.0. A version lived in four places — `package.json`, `manifest.json`,
+>    the git tag, that literal — and `release.yml`'s guard compares three. It drifted in the one
+>    nobody compared, and nothing failed, because nothing was looking. Now read from `package.json`
+>    at runtime, verified by running an MCP handshake against the packed tarball *and* the unzipped
+>    `.mcpb` rather than trusting that `../` resolves the same from `dist/` as from `src/`.
+>    `tests/version.test.ts` asserts server == package.json == manifest.json. Fixed in 0.1.3.
+>
+> **The pattern:** every one of these lived in the gap between "the code is correct" and "the thing
+> a stranger installs works." Four green CI runs said nothing about any of them. The verification
+> that caught them was installing the published artifact and speaking MCP to it.
+>
 > **⚠️ `audit` job red — dev tooling only.** One high (`tmp`, path traversal) reaching
 > `@anthropic-ai/mcpb` → `@inquirer/prompts` → `external-editor`, **no upstream fix available**. The
 > shipped tree is what matters and it is clean: `npm audit --omit=dev --audit-level=low` → **0
