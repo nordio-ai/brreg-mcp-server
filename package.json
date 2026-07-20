@@ -30,7 +30,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.check.json",
     "build": "tsc -p tsconfig.json",
     "bundle": "node bin/bundle.mjs",
-    "nace:build": "node bin/build-nace.mjs > src/nace-table.ts"
+    "nace:build": "node bin/build-nace.mjs > src/nace-table.ts",
+    "version": "node bin/sync-version.mjs && git add manifest.json"
   },
   "dependencies": {
     "@nordio/server-kit": "0.8.0",

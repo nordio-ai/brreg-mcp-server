@@ -48,3 +48,73 @@ jobs:
         run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # Everything above proves the code builds and the artifact uploads. Neither proves the thing a
+  # stranger installs works. Three defects shipped through a fully green pipeline before this job
+  # existed: `npx -y <pkg>` could not resolve an executable, provenance was rejected for a missing
+  # `repository`, and serverInfo.version was a literal that had drifted two patches behind. Each was
+  # found by hand, afterwards. This job is that hand-check, made unskippable.
+  #
+  # It installs from the PUBLIC registry in a clean directory — never the build tree, never a local
+  # tarball — because every one of those bugs was invisible from inside the repo.
+  smoke:
+    needs: release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Wait for the registry to serve the new version
+        # npm publish returns before the version is resolvable; polling beats a fixed sleep.
+        shell: bash
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          for i in $(seq 1 30); do
+            if [ "$(npm view @nordio/brreg-mcp-server@"$VER" version 2>/dev/null)" = "$VER" ]; then
+              echo "registry serving $VER after ~$((i*10))s"; exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::@nordio/brreg-mcp-server@$VER never became resolvable"; exit 1
+      - name: npx resolves, speaks MCP, and reports the released version
+        shell: bash
+        working-directory: ${{ runner.temp }}   # outside any checkout, like a real user
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"smoke","version":"1"}}}' \
+            | npx -y @nordio/brreg-mcp-server@"$VER" > handshake.json 2>err.txt || {
+                echo "::error::npx could not run the package"; cat err.txt; exit 1; }
+          node -e '
+            const fs = require("fs");
+            const want = process.argv[1];
+            const line = fs.readFileSync("handshake.json", "utf8").split("\n").find(Boolean);
+            if (!line) { console.error("::error::no response on stdout"); process.exit(1); }
+            const info = JSON.parse(line).result?.serverInfo;
+            if (!info) { console.error("::error::no serverInfo in initialize result"); process.exit(1); }
+            if (info.version !== want) {
+              console.error(`::error::serverInfo.version is ${info.version}, released ${want}`);
+              process.exit(1);
+            }
+            console.log(`ok: ${info.name} ${info.version}`);
+          ' "$VER"
+      - name: The .mcpb on the Release is a real bundle at the released version
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern '*.mcpb' --dir .
+          unzip -o -q ./*.mcpb -d bundle
+          node -e '
+            const m = require("./bundle/manifest.json");
+            const want = process.argv[1];
+            if (m.version !== want) {
+              console.error(`::error::.mcpb manifest is ${m.version}, released ${want}`);
+              process.exit(1);
+            }
+            if (!m.tools?.length) { console.error("::error::.mcpb declares no tools"); process.exit(1); }
+            console.log(`ok: ${m.name} ${m.version}, ${m.tools.length} tools`);
+          ' "$VER"
