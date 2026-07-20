@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · [SemVer](https://semver.org/).
 
+## [0.1.2] - 2026-07-20
+
+### Fixed
+- **npm publish with provenance failed: `E422 ... "repository.url" is ""`.** `--provenance`
+  cryptographically binds the tarball to the repo that built it, so npm rejects a package whose
+  `package.json` does not declare a matching `repository`. There was none. Added `repository`,
+  `homepage` and `bugs`. Only a real provenance publish from CI could surface this — a local
+  `npm publish` (no OIDC, no provenance) succeeds without it.
+
+> `0.1.1` was tagged and released on GitHub with a `.mcpb`, but never reached npm: the publish step
+> failed on the above. `0.1.2` is the first version on npm carrying the `npx` bin fix.
+
 ## [0.1.1] - 2026-07-20
 
 ### Fixed

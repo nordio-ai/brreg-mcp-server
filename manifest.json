@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "brreg-mcp-server",
   "display_name": "Norwegian Business Register (brreg)",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Look up Norwegian companies, roles and annual accounts from Brønnøysundregistrene — with the register's silent traps handled instead of passed through.",
   "long_description": "Brønnøysundregistrene's open API is free and keyless, but it fails quietly: retired industry codes return zero results with no error, holding companies file no revenue line, ~96% of units report no employee count, and sole proprietorships have no board. Each of those produces a confident wrong answer. This connector encodes them, adds annual accounts (which no other brreg connector covers), and returns no personal names unless you ask.",
   "author": {
