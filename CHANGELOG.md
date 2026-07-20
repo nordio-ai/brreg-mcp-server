@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · [SemVer](https://semver.org/).
 
+## [0.1.1] - 2026-07-20
+
+### Fixed
+- **`npx -y @nordio/brreg-mcp-server` failed with "could not determine executable to run."**
+  The package shipped two bins (`brreg-mcp`, `brreg`) and npm resolves a bare `npx <pkg>` by
+  looking for a bin matching the *package* name — neither did. That bare form is exactly what
+  MCP client configs use (`"command": "npx", "args": ["-y", "@nordio/brreg-mcp-server"]`), so
+  the npm install path was broken for its primary audience while the `.mcpb` and a direct
+  `node dist/cli.js` both worked. Added a `brreg-mcp-server` bin pointing at the stdio server;
+  the existing two are unchanged.
+
 ## [0.1.0] - 2026-07-20
 
 ### Added

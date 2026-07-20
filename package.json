@@ -1,10 +1,11 @@
 {
   "name": "@nordio/brreg-mcp-server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Norwegian business register (Brønnøysundregistrene) as an MCP server — companies, roles, subunits and annual accounts, with the register's silent traps encoded as guards.",
   "license": "MIT",
   "type": "module",
   "bin": {
+    "brreg-mcp-server": "dist/stdio.js",
     "brreg-mcp": "dist/stdio.js",
     "brreg": "dist/cli.js"
   },

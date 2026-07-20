@@ -2,9 +2,9 @@
   "manifest_version": "0.3",
   "name": "brreg-mcp-server",
   "display_name": "Norwegian Business Register (brreg)",
-  "version": "0.1.0",
-  "description": "Look up Norwegian companies, roles and annual accounts from Br\u00f8nn\u00f8ysundregistrene \u2014 with the register's silent traps handled instead of passed through.",
-  "long_description": "Br\u00f8nn\u00f8ysundregistrene's open API is free and keyless, but it fails quietly: retired industry codes return zero results with no error, holding companies file no revenue line, ~96% of units report no employee count, and sole proprietorships have no board. Each of those produces a confident wrong answer. This connector encodes them, adds annual accounts (which no other brreg connector covers), and returns no personal names unless you ask.",
+  "version": "0.1.1",
+  "description": "Look up Norwegian companies, roles and annual accounts from Brønnøysundregistrene — with the register's silent traps handled instead of passed through.",
+  "long_description": "Brønnøysundregistrene's open API is free and keyless, but it fails quietly: retired industry codes return zero results with no error, holding companies file no revenue line, ~96% of units report no employee count, and sole proprietorships have no board. Each of those produces a confident wrong answer. This connector encodes them, adds annual accounts (which no other brreg connector covers), and returns no personal names unless you ask.",
   "author": {
     "name": "Nordio AI",
     "url": "https://github.com/nordio-ai"
@@ -51,7 +51,7 @@
       "arguments": [
         "orgnr"
       ],
-      "text": "Perform due diligence on Norwegian company ${arguments.orgnr}.\n\nRead brreg://reference first \u2014 the figures are Norwegian and the field names are easy to misread.\n\n1. get_units \u2014 identity, org form, status. A null antallAnsatte means unknown, not zero.\n2. get_roles \u2014 board and management STRUCTURE. Only request names if the task needs them.\n3. get_financials \u2014 read `status` before the numbers: filed_no_revenue_line means a holding company (not dormant); not_applicable means an ENK, which never files (not a red flag); check `valuta` before stating any figure and `stale_months` before calling it current.\n\nSummarise what the company is, who runs it, what the accounts say, and \u2014 explicitly \u2014 what the register does NOT tell you. Distinguish 'no data' from 'zero' every time."
+      "text": "Perform due diligence on Norwegian company ${arguments.orgnr}.\n\nRead brreg://reference first — the figures are Norwegian and the field names are easy to misread.\n\n1. get_units — identity, org form, status. A null antallAnsatte means unknown, not zero.\n2. get_roles — board and management STRUCTURE. Only request names if the task needs them.\n3. get_financials — read `status` before the numbers: filed_no_revenue_line means a holding company (not dormant); not_applicable means an ENK, which never files (not a red flag); check `valuta` before stating any figure and `stale_months` before calling it current.\n\nSummarise what the company is, who runs it, what the accounts say, and — explicitly — what the register does NOT tell you. Distinguish 'no data' from 'zero' every time."
     }
   ],
   "tools_generated": false,
