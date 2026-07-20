@@ -2,9 +2,10 @@ name: Release
 # §7a: the `.mcpb` reaches users via a GitHub RELEASE — never committed (`*.mcpb` is gitignored).
 # Tag `vX.Y.Z` → build → pack (prod-only staging) → attach to the Release → publish to npm.
 #
-# ⚠️ THIS WORKFLOW HAS NEVER RUN. This repo has no git remote (a deliberate earlier decision), so
-# GitHub Actions has never executed here — neither this nor ci.yml. Until a remote exists, the .mcpb
-# reaches nobody and "cross-platform proven" is an assumption, not a result. See SCORECARD.md.
+# First ran 2026-07-20 and now has a track record: v0.1.2 and v0.1.3 went out end-to-end, Release +
+# npm with provenance. The two earlier attempts failed on things only a real run could show — a
+# Publish-type npm token (2FA-enforced → EOTP in CI, unfixable by retry) and a missing `repository`
+# field (provenance binds the tarball to its repo). See SCORECARD.md.
 on:
   push:
     tags: ['v*']
@@ -20,6 +21,12 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
+      # Pin npm, not just Node. Node 22 ships npm 10; local dev and Dependabot write lockfiles with
+      # npm 11, and npm 10's `npm ci` REJECTS an npm 11 lock ("Missing: esbuild@0.28.1 from lock
+      # file") while npm 11 reads either. Unpinned, the npm that writes the lock and the npm that
+      # reads it drift apart and every Dependabot PR fails on `npm ci` — which is exactly what
+      # happened to all six of them. See LEARNINGS item 31.
+      - run: npm i -g npm@11
       - name: Guard — tag matches manifest.json AND package.json
         # Two manifests carry a version and nothing else compares them, so a release can otherwise
         # ship a .mcpb and an npm package claiming different versions.
@@ -67,6 +74,12 @@ jobs:
     steps:
       - uses: actions/setup-node@v7
         with: { node-version: 22 }
+      # Pin npm, not just Node. Node 22 ships npm 10; local dev and Dependabot write lockfiles with
+      # npm 11, and npm 10's `npm ci` REJECTS an npm 11 lock ("Missing: esbuild@0.28.1 from lock
+      # file") while npm 11 reads either. Unpinned, the npm that writes the lock and the npm that
+      # reads it drift apart and every Dependabot PR fails on `npm ci` — which is exactly what
+      # happened to all six of them. See LEARNINGS item 31.
+      - run: npm i -g npm@11
       - name: Wait for the registry to serve the new version
         # npm publish returns before the version is resolvable; polling beats a fixed sleep.
         shell: bash

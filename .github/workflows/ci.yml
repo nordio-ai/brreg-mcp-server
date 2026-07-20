@@ -27,6 +27,12 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      # Pin npm, not just Node. Node 22 ships npm 10; local dev and Dependabot write lockfiles with
+      # npm 11, and npm 10's `npm ci` REJECTS an npm 11 lock ("Missing: esbuild@0.28.1 from lock
+      # file") while npm 11 reads either. Unpinned, the npm that writes the lock and the npm that
+      # reads it drift apart and every Dependabot PR fails on `npm ci` — which is exactly what
+      # happened to all six of them. See LEARNINGS item 31.
+      - run: npm i -g npm@11
       - run: npm ci --ignore-scripts   # postinstall is the live npm attack vector
       - run: npm run typecheck
       - run: npm test
@@ -48,6 +54,12 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: actions/setup-node@v7
         with: { node-version: 22, cache: npm }
+      # Pin npm, not just Node. Node 22 ships npm 10; local dev and Dependabot write lockfiles with
+      # npm 11, and npm 10's `npm ci` REJECTS an npm 11 lock ("Missing: esbuild@0.28.1 from lock
+      # file") while npm 11 reads either. Unpinned, the npm that writes the lock and the npm that
+      # reads it drift apart and every Dependabot PR fails on `npm ci` — which is exactly what
+      # happened to all six of them. See LEARNINGS item 31.
+      - run: npm i -g npm@11
       - run: npm ci --ignore-scripts
       # The tree that actually ships to a Desktop user who cannot audit it: zero tolerance.
       # Two runtime deps (server-kit + zod), so this is a bar we can actually hold.
@@ -69,6 +81,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v7
         with: { node-version: 22 }
+      # Pin npm, not just Node. Node 22 ships npm 10; local dev and Dependabot write lockfiles with
+      # npm 11, and npm 10's `npm ci` REJECTS an npm 11 lock ("Missing: esbuild@0.28.1 from lock
+      # file") while npm 11 reads either. Unpinned, the npm that writes the lock and the npm that
+      # reads it drift apart and every Dependabot PR fails on `npm ci` — which is exactly what
+      # happened to all six of them. See LEARNINGS item 31.
+      - run: npm i -g npm@11
       - run: npm run nace:build
       - run: git diff --exit-code src/nace-table.ts
 
@@ -81,5 +99,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v7
         with: { node-version: 22, cache: npm }
+      # Pin npm, not just Node. Node 22 ships npm 10; local dev and Dependabot write lockfiles with
+      # npm 11, and npm 10's `npm ci` REJECTS an npm 11 lock ("Missing: esbuild@0.28.1 from lock
+      # file") while npm 11 reads either. Unpinned, the npm that writes the lock and the npm that
+      # reads it drift apart and every Dependabot PR fails on `npm ci` — which is exactly what
+      # happened to all six of them. See LEARNINGS item 31.
+      - run: npm i -g npm@11
       - run: npm ci --ignore-scripts
       - run: BRREG_LIVE=1 npx vitest run tests/live
