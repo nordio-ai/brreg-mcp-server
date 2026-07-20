@@ -26,10 +26,13 @@ import { referenceResource } from "./reference.js";
 const started = Date.now();
 const elapsed = () => Math.round((Date.now() - started) / 100) / 10;
 
-function out(data: unknown, code = 0): never {
+function out(data: unknown, code = 0): void {
   const body = data && typeof data === "object" && !Array.isArray(data) ? data : { result: data };
-  process.stdout.write(JSON.stringify({ ...body, elapsed_sec: elapsed() }) + "\n");
-  process.exit(code);
+  // Exit only once the pipe has taken the whole payload: a 200-orgnr get_roles
+  // response is ~500KB, and process.exit() drops anything past the 64KB pipe
+  // buffer. exitCode is the fallback if the callback never fires.
+  process.exitCode = code;
+  process.stdout.write(JSON.stringify({ ...body, elapsed_sec: elapsed() }) + "\n", () => process.exit(code));
 }
 
 function usage(msg?: string): never {
@@ -181,11 +184,11 @@ export async function main(argv: string[]): Promise<void> {
   }
   if (verb === "doctor") {
     const d = doctor();
-    out(d, d.ok ? 0 : 1);
+    return out(d, d.ok ? 0 : 1);
   }
   if (verb === "self-test") {
     const t = await selfTest();
-    out(t, t.ok ? 0 : 1);
+    return out(t, t.ok ? 0 : 1);
   }
 
   const tool = buildTools({ mock }).find((t) => t.name === verb);
@@ -201,12 +204,12 @@ export async function main(argv: string[]): Promise<void> {
   try {
     const res: any = await tool.handler(parsed.data as any, { mock } as any);
     const text = res?.content?.[0]?.text;
-    out(text ? JSON.parse(text) : res);
+    return out(text ? JSON.parse(text) : res);
   } catch (err) {
     // brreg failures are data (410 gone, 404, 400), and the tools already model them. Anything
     // reaching here is unexpected — report the reason, never the upstream body (it can carry a name).
     process.stderr.write(`${verb} failed: ${(err as Error).message}\n`);
-    out({ error: (err as Error).message, verb }, 1);
+    return out({ error: (err as Error).message, verb }, 1);
   }
 }
 
