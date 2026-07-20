@@ -3,6 +3,20 @@
 All notable changes to this project are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · [SemVer](https://semver.org/).
 
+## [0.1.3] - 2026-07-20
+
+### Fixed
+- **The MCP handshake announced the wrong version.** `serverInfo.version` was a literal `"0.1.0"`
+  in `src/server.ts`, so `0.1.2` published to npm and told every client it was `0.1.0`. A version
+  lived in four places — `package.json`, `manifest.json`, the git tag, and that literal — while
+  `release.yml`'s guard compares only the first three. The fourth was the one nobody compared.
+
+  A client reads `serverInfo.version` to decide whether it is talking to a build containing a given
+  fix; a version that under-reports is a confident wrong answer, which is the failure mode this
+  connector exists to refuse. Now read from `package.json` at runtime, verified working from `src/`,
+  from the packed npm tarball, and from inside the `.mcpb`. `tests/version.test.ts` asserts all
+  three sources agree, so the guard can no longer be outrun.
+
 ## [0.1.2] - 2026-07-20
 
 ### Fixed

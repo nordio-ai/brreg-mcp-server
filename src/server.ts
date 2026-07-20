@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { createMcpServer, type ToolDef } from "@nordio/server-kit";
 import { instructions } from "./instructions.js";
 import { referenceResource, dueDiligencePrompt } from "./reference.js";
@@ -6,6 +7,16 @@ import { makeSearchTool } from "./tools/search.js";
 import { makeRolesTool } from "./tools/roles.js";
 import { makeFinancialsTool } from "./tools/financials.js";
 import { mockFetch } from "./mock.js";
+
+// The version reported in the MCP handshake. Read from package.json rather than typed here:
+// a hardcoded literal is a fourth source of truth (package.json, manifest.json, the git tag, this)
+// and release.yml's guard only compares the first three. It had already drifted — 0.1.2 shipped
+// announcing itself as 0.1.0 — and nothing failed, because nothing was looking.
+// Resolves relative to this module, so it works from src/ (dev), dist/ (npm) and the .mcpb, all of
+// which carry a package.json with a version at the package root. tests/version.test.ts holds it shut.
+export const VERSION: string = (
+  createRequire(import.meta.url)("../package.json") as { version: string }
+).version;
 
 // A local stdio MCP over brreg's open register (Pattern C), packaged as a .mcpb.
 // No auth, no secrets, no state: brreg is public and keyless, the only outbound host is
@@ -72,7 +83,7 @@ export function buildServer(opts: { mock?: boolean } = {}) {
   // thing this connector promises not to do.
   return createMcpServer({
     name: "brreg-mcp",
-    version: "0.1.0",
+    version: VERSION,
     instructions,
     tools: buildTools(opts),
     resources: [referenceResource],
