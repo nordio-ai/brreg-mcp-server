@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.1.0] - 2026-07-20
 
 ### Added
 - **Four tools** over Brønnøysundregistrene: `get_units`, `search_units`, `get_roles`, `get_financials`.

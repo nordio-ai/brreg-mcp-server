@@ -66,18 +66,25 @@ stdout is one JSON object (with `elapsed_sec`); diagnostics on stderr; usage err
 
 ## 🖥️ Claude Desktop
 
-Download the `.mcpb` from Releases and double-click it. No terminal, no Node install, no API key — brreg needs no credentials.
-
-> ⚠️ **There are no Releases yet — this repo has no git remote**, by an explicit earlier decision. So GitHub Actions has never run (neither CI nor `release.yml`), the `.mcpb` is correctly gitignored but reaches nobody, and "cross-platform proven" is an assumption rather than a result. Build one locally with `npm run bundle`. See [SCORECARD.md](SCORECARD.md).
+Download the `.mcpb` from [Releases](https://github.com/nordio-ai/brreg-mcp-server/releases) and double-click it. No terminal, no Node install, no API key — brreg needs no credentials.
 
 <details>
 <summary>Claude Code / Cursor / any stdio client</summary>
 
-`.mcp.json` is committed:
+`dist/` is **not** committed, so build it once:
+
+```bash
+git clone https://github.com/nordio-ai/brreg-mcp-server
+cd brreg-mcp-server && npm ci && npm run build
+```
+
+`.mcp.json` is committed and works when the client's working directory is the repo:
 
 ```json
 { "mcpServers": { "brreg": { "command": "node", "args": ["./dist/stdio.js"] } } }
 ```
+
+From anywhere else, give an absolute path to `dist/stdio.js` — the relative form above resolves against the client's cwd, not this file.
 </details>
 
 ## 💬 Try it
