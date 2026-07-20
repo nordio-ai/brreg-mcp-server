@@ -3,7 +3,7 @@
 Scored against `mcp-factory/checklists/factory-scorecard.md`.
 Shape: Pattern C, stdio, `read-only`. `[remote]`/`[write]` lines are genuinely N/A — no auth surface, no write surface, no secrets.
 
-## VERDICT: **Ship** — the remote exists, CI is green cross-platform; one ❌ remains (npm publish).
+## VERDICT: **Shipped** — public, released, on npm with provenance; CI fully green, no ❌ open.
 
 > **§8 Distribution added 2026-07-15 — and it found six ❌ this file had scored ✅ or not scored at all.**
 > The factory scorecard had **zero** lines mentioning `npm`, `release.yml` or `mcp-updater`, so an
@@ -63,12 +63,18 @@ Shape: Pattern C, stdio, `read-only`. `[remote]`/`[write]` lines are genuinely N
 > a stranger installs works." Four green CI runs said nothing about any of them. The verification
 > that caught them was installing the published artifact and speaking MCP to it.
 >
-> **⚠️ `audit` job red — dev tooling only.** One high (`tmp`, path traversal) reaching
-> `@anthropic-ai/mcpb` → `@inquirer/prompts` → `external-editor`, **no upstream fix available**. The
-> shipped tree is what matters and it is clean: `npm audit --omit=dev --audit-level=low` → **0
-> vulnerabilities**. The `.mcpb` is staged production-only, so the vulnerable package is not in it.
-> Left red deliberately rather than weakening the gate — per this file's own standard, quietly
-> lowering a threshold to get green is the failure mode, not the fix.
+> **✅ `audit` — resolved 2026-07-20, by patching rather than by moving the line.** A high in `tmp`
+> (path traversal) reached in via `@anthropic-ai/mcpb` → `@inquirer/prompts` → `external-editor`.
+> `npm audit` reported **`fixAvailable: false`** and `@anthropic-ai/mcpb@2.1.2` is the latest publish,
+> which reads as "unfixable — either leave it red or relax `--audit-level` to `critical`."
+>
+> **That reading was wrong.** The advisory range is `<=0.2.5` and **`tmp@0.2.7` exists**;
+> `fixAvailable: false` means npm will not rewrite a *pinned transitive chain*, not that no patch was
+> published. `"overrides": { "tmp": "^0.2.7" }` forces it. Verified by running the tool that actually
+> uses `tmp` — `npm run bundle` still packs a valid `.mcpb` — because an override that silences the
+> audit by breaking the packer is not a fix. The dev gate now passes **at its original `high`
+> threshold**; the shipped tree remains 0 vulnerabilities. Drop the override when `@anthropic-ai/mcpb`
+> bumps `@inquirer/prompts`. Recorded as factory LEARNINGS item 30.
 >
 > Also fixed en route: `readme-parity.sh` was **silently blind** on this repo (it parsed
 > `tests/readme.test.ts` as the README *and* missed tools split into `src/tools/`; the two bugs
